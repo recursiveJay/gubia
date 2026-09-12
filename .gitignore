@@ -1,0 +1,16 @@
+# `.gubia/` es estado local del motor, por repo y por proceso: no se
+# versiona salvo la nota y el `.gitkeep` de `logs/` (ver .gubia/README.md).
+# En particular `agent-probe.dump` es un volcado del entorno real de la
+# máquina — se regenera en cada `gubia run` y no tiene sitio en la historia.
+.gubia/*
+!.gubia/README.md
+!.gubia/logs/
+.gubia/logs/*
+!.gubia/logs/.gitkeep
+
+# Testigo de iteraciones de las pruebas e2e del fixture repo-minimo
+# (tarea 10): se regenera en cada ejecución del CLI falso y no tiene
+# sitio en la historia.
+.fixture-log/
+
+plan/

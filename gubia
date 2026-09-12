@@ -1,0 +1,2175 @@
+#!/usr/bin/env bash
+# gubia — loop engine that drains markdown task plans.
+#
+# Monolithic script per `vault/spec/motor.md` ("Script
+# structure"): a per-layer prefix as the module system (`state_`,
+# `agents_`, `integrity_`, `run_`, `invoke_`) and `main` under a guard
+# so tests can source it without executing it.
+
+# Version guard before the shell options: `inherit_errexit`
+# requires bash >= 4.4, and on an old bash the `shopt` would fail with
+# a message unrelated to the real problem.
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
+  printf 'gubia: requires bash >= 4.4 (current: %s.%s)\n' \
+    "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}" >&2
+  exit 1
+fi
+
+set -euo pipefail
+shopt -s inherit_errexit
+export LC_ALL=C
+umask 077
+
+# ---------------------------------------------------------------------------
+# state_: local state `.gubia/state.env`
+#
+# 6 flat keys, re-read at the start of every iteration. Never
+# sourced (an agent writes it: `source` would be arbitrary code
+# execution); the allowlisted read arrives in its own subtask.
+# ---------------------------------------------------------------------------
+
+# Path to the state file, relative to the project root (the launch
+# pwd). Overridable via environment so tests can point it at a
+# temporary repo.
+GUBIA_STATE_ENV="${GUBIA_STATE_ENV:-.gubia/state.env}"
+
+# Path to the global agent catalog (`agents.sh`). Unlike
+# `state.env` this isn't repo state but human/engine config
+# ("Boundary between global config and local state"), and it **is** sourced: it's
+# bash on purpose (functions and arrays), and no iteration agent
+# writes it, so there's nothing to allowlist.
+#
+# Resolution order: `GUBIA_AGENTS_SH` from the environment if set;
+# otherwise the local `config/agents.sh` (versioned in the repo); if it
+# doesn't exist, the copy installed at `~/.config/gubia/agents.sh`.
+# Overridable via environment, same as `GUBIA_STATE_ENV`, so
+# tests can point it at their own catalog.
+if [[ -z "${GUBIA_AGENTS_SH:-}" ]]; then
+  if [[ -f "config/agents.sh" ]]; then
+    GUBIA_AGENTS_SH="config/agents.sh"
+  else
+    GUBIA_AGENTS_SH="$HOME/.config/gubia/agents.sh"
+  fi
+fi
+
+# The 6 keys of the closed set with their default values, as fixed
+# by `vault/spec/motor.md` ("Local state (`state.env`)",
+# values taken from the original `state.toml` — see
+# `vault/spec/catalogo.md`).
+state_defaults() {
+  printf '%s\n' \
+    'effort_level=medium' \
+    'fallback_list=default' \
+    'model_index=0' \
+    'thinking=true' \
+    'memory_max=8G' \
+    'loop_max_logs=20'
+}
+
+# Creates `.gubia/state.env` with the defaults when it doesn't exist.
+#
+# Never touches an existing file: from the first creation onward, a
+# missing key means a corrupt file (abortive validation in its own
+# subtask), never "default value".
+state_ensure() {
+  if [[ -f "$GUBIA_STATE_ENV" ]]; then
+    return 0
+  fi
+  mkdir -p -- "$(dirname -- "$GUBIA_STATE_ENV")"
+  state_defaults >"$GUBIA_STATE_ENV"
+}
+
+# Memory of the `run` process, never on disk (`motor-decisiones.md`,
+# "Consistency when changing effort level"): `state.env` only
+# persists what survives an engine death.
+#
+# - `state_prev_effort`: the `effort_level` seen on the previous
+#   re-read. Empty before the first read; `state_read` compares it
+#   on every re-read.
+# - `state_streak_index`: streak sentinel — the `model_index` of the
+#   first failure (task 06 sets it when an iteration fails and aborts
+#   with `fallback-exhausted` if it comes back to it without an
+#   intervening success). Empty = no active streak; any success or
+#   level change resets it.
+state_prev_effort=
+state_streak_index=
+
+# Strips a complete pair of quotes (single or double) from the value
+# of a `state.env` line. Values are unquoted, but the original
+# `state.toml` used `effort_level = 'medium'`, and a quote dragged in
+# by habit would give an invalid value with a confusing message. The
+# degenerate case of a single-quote value is left as-is.
+#
+# Returns via a global variable (`state_stripped`) rather than command
+# substitution: it's called by two readers of the file (`state_read`
+# on every loop iteration and `config_validate_scalars`), and
+# `$( … )` would fork a subshell per line read.
+state_stripped=
+state_strip_quotes() {
+  local value="$1"
+  if [[ "$value" == \"*\" && "$value" != \" ]]; then
+    value="${value#\"}"
+    value="${value%\"}"
+  elif [[ "$value" == \'*\' && "$value" != \' ]]; then
+    value="${value#\'}"
+    value="${value%\'}"
+  fi
+  state_stripped="$value"
+}
+
+# Reads `state.env` line by line and exports only the 6 keys of the
+# closed set (`motor-decisiones.md`, "Local state
+# (`state.env`)"): never `source` — the file is written by the agent,
+# so sourcing it would be arbitrary code execution. Any key outside
+# the set is silently discarded (junk, typos, comments); the
+# assignment is literal via `printf -v` (no eval) + explicit `export`
+# per key.
+#
+# Values are unquoted, but a complete pair of single or double quotes
+# is stripped: the original `state.toml` used
+# `effort_level = 'medium'`, and a quote dragged in by habit would
+# give an invalid value with a confusing message.
+#
+# Requires the file to exist (guaranteed by `state_ensure`). At the
+# end, `state_validate` validates the ranges abortively, and the
+# level-change detection clears the streak sentinel if applicable.
+state_read() {
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == *"="* ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      effort_level|fallback_list|model_index|thinking|memory_max|loop_max_logs) ;;
+      *) continue ;;
+    esac
+    state_strip_quotes "$value"
+    value="$state_stripped"
+    printf -v "$key" '%s' "$value"
+    # shellcheck disable=SC2163 # intentional dynamic export: $key is the
+    # variable name to export, not a literal value to export.
+    export "$key"
+  done <"$GUBIA_STATE_ENV"
+  # Reset the streak sentinel on a level change: the sentinel holds a
+  # `model_index` without remembering which level it was for, so
+  # after a change it would compare indices from different lists
+  # (low: 3, medium: 4, high: 4) and could abort with a false
+  # `fallback-exhausted`. Since it isn't on disk, the engine clears it
+  # here: this re-read is the only point where the `run` process sees
+  # the new `effort_level` (written by the agent via `gubia effort
+  # set` from inside an iteration, in another process).
+  #
+  # The first read (prev empty) never resets: there can't be an
+  # active streak before the first iteration.
+  if [[ -n "$state_prev_effort" && "$state_prev_effort" != "${effort_level:-}" ]]; then
+    # shellcheck disable=SC2034 # streak sentinel: read by task 06
+    # (fallback-exhausted), not this module.
+    state_streak_index=
+  fi
+  state_prev_effort="${effort_level:-}"
+}
+
+# Exit 2 naming the key and value (abortive validation).
+state_die() {
+  local key="$1" value="$2" expected="$3"
+  printf 'gubia: %s: invalid value for %s: %s (expected: %s)\n' \
+    "$GUBIA_STATE_ENV" "$key" "$value" "$expected" >&2
+  exit 2
+}
+
+# Abortive range validation (`motor-decisiones.md`, "Local state
+# (`state.env`)"): never self-heal — falling back to the default value
+# hides the failure and leaves the loop running with an effort level
+# different from the one the plan requested. Checks use `${VAR:-}` so
+# the message shows instead of an `unbound variable` from `set -u`.
+#
+# The `model_index` guard (out of range of the active list) is not
+# abortive and lives below, in `state_guard_model_index`.
+state_validate() {
+  case "${effort_level:-}" in
+    low|medium|high) ;;
+    *) state_die effort_level "${effort_level:-}" 'low|medium|high' ;;
+  esac
+  case "${thinking:-}" in
+    true|false) ;;
+    *) state_die thinking "${thinking:-}" 'true|false' ;;
+  esac
+  # `model_index` is also abortive as a range (integer >= 0): the
+  # non-abortive guard below compares arithmetically, and a
+  # non-integer value there would blow up with a syntax error unrelated
+  # to the real problem. Hard range first, then list range.
+  case "${model_index:-}" in
+    ''|*[!0-9]*) state_die model_index "${model_index:-}" 'integer >= 0' ;;
+  esac
+}
+
+# Non-abortive range guard for `model_index` (`motor-decisiones.md`,
+# "Consistency when changing effort level", "Range guard on
+# read"): `model_index` >= length of the active list -> fall back to
+# `0` with a stderr warning, no `die`. It's the only range violation
+# that doesn't abort: `state.env` can be left with a stale index if
+# the engine dies between the two writes of `effort set` (the
+# `effort_level` one and the `model_index` reset), and aborting would
+# punish the user for an engine failure.
+#
+# The length of the active list is known by the catalog (`agents.sh`,
+# task 03), not this module: it's received as an argument instead of
+# sourcing global config from here, and the engine passes it in when
+# reading (`state_read` doesn't know about lists). `0` (empty list)
+# also triggers the reset: there's no valid index to preserve.
+#
+# Doesn't persist the `0` to `state.env`: the `sed -i` write of that
+# key is the engine invocation, which will rotate it anyway; here it's
+# enough for the iteration to start from an existing model.
+state_guard_model_index() {
+  local active_len="$1"
+  if ((model_index >= active_len)); then
+    printf 'gubia: %s: model_index=%d out of range of the active list (length %d); falling back to 0\n' \
+      "$GUBIA_STATE_ENV" "$model_index" "$active_len" >&2
+    model_index=0
+  fi
+}
+
+# Surgical write of a single key (`motor-decisiones.md`,
+# "Surgical write with `sed -i`, preceded by an existence
+# check"): `grep -q` + `sed -i`, never regenerate the whole
+# file. There are two writers (the agent via `gubia effort set`, the
+# engine when rotating) and `sed` touches its line and only its line,
+# immune by construction to overwriting what the other one wrote.
+#
+# The upfront existence check covers the only real `sed` failure
+# here: if the key doesn't exist, the `s///` matches nothing, exits 0,
+# and the write is silently lost. A missing key in an already-created
+# file means a corrupt file — same abortive policy as
+# `state_validate` (exit 2, naming the key), never self-heal to the
+# default: that would hide the corruption and leave the loop running
+# with an effort level different from the one the plan requested.
+#
+# Escaping isn't an issue: the 6 values are simple strings and
+# numbers, without `/`, `&` or `\` (documented in the same decision).
+#
+# Doesn't touch the variables exported by `state_read`: the two
+# writers persist and re-read on the next iteration; keeping memory
+# and disk in sync here would duplicate what `state_read` already does
+# at the start of every iteration.
+state_set() {
+  local key="$1" value="$2"
+  if ! grep -q "^${key}=" "$GUBIA_STATE_ENV"; then
+    printf 'gubia: %s: missing key: %s (corrupt file)\n' \
+      "$GUBIA_STATE_ENV" "$key" >&2
+    exit 2
+  fi
+  sed -i "s|^${key}=.*|${key}=${value}|" "$GUBIA_STATE_ENV"
+}
+
+# Circular rotation of `model_index` within the active level
+# (`motor-decisiones.md`, "Model rotation"): exit ≠ 0 from the
+# invocation -> `model_index++`; past the last model in the list, it
+# wraps back to `0` — in case the first one regenerated while the rest
+# were being traversed.
+#
+# The active list length arrives as an argument, same as in
+# `state_guard_model_index`: the catalog (`agents.sh`) knows it, and
+# `state_` doesn't source global config. A degenerate list (length
+# `0`) has no next index to compute and `%` would blow up with a
+# division by zero, so it's treated like the range guard: `0`, without
+# aborting.
+#
+# Persists with `state_set` in addition to updating the in-memory
+# copy: the index being rotated to is the model the next iteration
+# starts with, and it must survive an engine death (`state.env` is
+# exactly what survives). The start-of-iteration re-read will export
+# it again; keeping memory and disk in agreement here prevents the
+# window between the rotation and that re-read from seeing two
+# different values.
+#
+# The streak sentinel is NOT touched here: saving it, resetting it,
+# and aborting with `fallback-exhausted` is the loop's decision, not
+# the index arithmetic's.
+state_rotate_model_index() {
+  local active_len="$1"
+  if ((active_len <= 0)); then
+    printf 'gubia: %s: empty active list (length %d); model_index set to 0 without rotating\n' \
+      "$GUBIA_STATE_ENV" "$active_len" >&2
+    model_index=0
+  else
+    model_index=$(((model_index + 1) % active_len))
+  fi
+  state_set model_index "$model_index"
+}
+
+# `gubia effort set <low|medium|high>` (motor-decisiones.md,
+# "Consistency when changing effort level"): the agent requests the
+# level; applying the change consistently is the engine's
+# responsibility. That means writing TWO keys in the same invocation:
+# `effort_level` to the requested level and `model_index` reset to
+# `0` — `model_index` is an index within the active level's fallback
+# list, and the lists have different lengths (low: 3, medium: 4,
+# high: 4), so leaving the index untouched would start the new level
+# on an arbitrary or out-of-range model.
+#
+# The streak sentinel isn't touched here either: it lives in the
+# `run` process's memory (not on disk), and `state_read` clears it on
+# the start-of-iteration re-read when it detects that `effort_level`
+# changed — see `state_prev_effort`/`state_streak_index` above.
+#
+# It doesn't take `flock` ("Concurrency"): it runs from inside an
+# iteration, with the engine blocked waiting on the agent; taking the
+# plan's lock would self-deadlock the loop.
+#
+# The level is validated before writing: writing an out-of-range value
+# would leave a `state.env` that the next read aborts on. It's a usage
+# error (it comes from argv, not the file), so the message names the
+# subcommand rather than `state.env`, but keeps the abortive policy:
+# exit 2, naming the value and the expected set. A missing level gets
+# its own message with usage, like `run` without a plan path: "invalid
+# level: " with an empty value wouldn't say what's missing.
+cmd_effort_set() {
+  local level="$1"
+  case "$level" in
+    low|medium|high) ;;
+    '')
+      printf 'gubia: effort set: missing level (usage: gubia effort set <low|medium|high>)\n' >&2
+      exit 2
+      ;;
+    *)
+      printf 'gubia: effort set: invalid level: %s (expected: low|medium|high)\n' \
+        "$level" >&2
+      exit 2
+      ;;
+  esac
+  state_set effort_level "$level"
+  state_set model_index 0
+}
+
+# ---------------------------------------------------------------------------
+# run_: loop core
+#
+# Locating the active task is the whole "parsing" that v1 does
+# (`motor-decisiones.md`, "Locate the active task file"):
+# first `- [ ]` in the plan + the path of its markdown link. The
+# engine doesn't know any task-directory convention nor derives one
+# from the plan's name — the link is the only source of truth
+# (`motor-contrato.md`). The rest of the core (`flock`, injected
+# prompt) arrives with its own subtasks.
+# ---------------------------------------------------------------------------
+
+# Project root and absolute plan path, captured **once** at `run`
+# startup. `run_resolve_plan` sets them; empty before that call and
+# nothing reassigns them afterward: a repeated resolution mid-loop
+# would diverge as soon as the process's cwd changes.
+run_root=
+run_plan_abs=
+
+# Plan-to-absolute conversion + root guard (`motor-decisiones.md`,
+# "Agent invocation and process": "the root is the pwd of the
+# launch, captured in absolute form once at startup"). The engine
+# launches from the project root, so the root is the pwd in absolute
+# form and the plan is resolved against it; if it doesn't fall under
+# the root, immediate `die` — turns a silent resolution failure into
+# an explicit error, without adding a git dependency at startup.
+#
+# Resolution goes through `cd` + `pwd -P` on the plan's directory,
+# never through string concatenation: a `plan/../../outside.md`
+# escapes the root on the filesystem even though it starts with the
+# root's lexical prefix, and concatenation would let it through.
+# `pwd -P` also resolves symlinks, so the guard's comparison is
+# between real paths. The `cd` requires the directory to exist: a
+# nonexistent plan dies here with its own message, not further down
+# with a read error unrelated to the problem.
+#
+# Exit 2 (same abortive policy as `state_die`): plan outside the root,
+# or the plan's directory can't be resolved.
+run_resolve_plan() {
+  local plan="$1" dir
+  run_root="$(pwd -P)"
+  if ! dir="$(cd -- "$(dirname -- "$plan")" && pwd -P)"; then
+    printf 'gubia: run: cannot resolve plan path: %s\n' \
+      "$plan" >&2
+    exit 2
+  fi
+  run_plan_abs="${dir}/$(basename -- "$plan")"
+  if [[ "$run_plan_abs" != "$run_root"/* ]]; then
+    printf 'gubia: run: the plan (%s) does not fall under the project root (%s)\n' \
+      "$run_plan_abs" "$run_root" >&2
+    exit 2
+  fi
+}
+
+
+# Exports the path anchors to the agent's child process environment
+# (`motor-decisiones.md`, "Agent invocation and process", "Plan
+# resolution and path anchors"):
+#
+# - `GUBIA_ROOT`: project root, absolute (= `run_root`).
+# - `GUBIA_PLAN`: plan path, **relative to the root**.
+#
+# They go through the child process's environment and nowhere else:
+# never through the prompt text — the contract header references them
+# as `${GUBIA_ROOT}`/`${GUBIA_PLAN}` precisely so that no absolute
+# path enters what the agent reads or might copy into a versioned
+# file — and never through `state.env`, because they're intrinsic to
+# the invocation, not state that must survive the process. `export`
+# is enough: the child inherits the engine's environment, and the
+# invocation layer (`invoke_`, with its own subtask) will launch the
+# agent from here.
+#
+# Guard: requires a prior `run_resolve_plan`. Exporting an empty
+# `GUBIA_ROOT` would give the agent a broken anchor with a silent
+# failure far from the source (the header tells it "always compose
+# from ${GUBIA_ROOT}").
+#
+# The prefix strip relativizes without string concatenation:
+# `run_resolve_plan`'s guard already guarantees `run_plan_abs` falls
+# under `${run_root}/`, so the pattern always matches.
+run_export_env() {
+  if [[ -z "$run_root" || -z "$run_plan_abs" ]]; then
+    printf 'gubia: run: environment export before resolving the plan (missing run_resolve_plan)\n' >&2
+    exit 2
+  fi
+  export GUBIA_ROOT="$run_root"
+  export GUBIA_PLAN="${run_plan_abs#"$run_root"/}"
+}
+
+# Path of the active task file, resolved relative to the plan's
+# directory. `run_locate_active_task` sets it; empty before the first
+# location.
+run_active_task=
+
+# Locates the active task file.
+#
+# Walks the plan top to bottom to the first `- [ ]` (anchored at the
+# start of the item, with indentation tolerated) and extracts the
+# markdown link path `](…)` from that line. Resolves it **relative to
+# the plan's directory** (`plan/plan.md` + `plan/04.md` →
+# `plan/plan/04.md`), never relative to the pwd: plan links are
+# relative to the file that contains them (`motor-contrato.md`,
+# "Fixed header", point 1), and the process's cwd may have changed by
+# then, so the plan's directory is composed in absolute form with
+# `cd` + `pwd` in a command substitution.
+#
+# Exit codes:
+# - 0: located; `run_active_task` carries the path.
+# - 1: no `- [ ]` left in the plan. Not an error: what the loop does
+#   then (stop file, wait) is the loop's decision, not this function's.
+# - 2: the first `- [ ]` carries no link to any task file. "Every plan
+#   entry links to a task file: no inline tasks" is a contract rule
+#   (`motor-contrato.md`), so this is a malformed plan and aborts with
+#   a message — a path is never guessed.
+run_locate_active_task() {
+  local plan="$1" line link dir
+  local re_angle='\]\(<([^>]*)>\)' re_plain='\]\(([^)]*)\)'
+  line="$(grep -m1 -- '^[[:space:]]*- \[ \]' "$plan" || true)"
+  [[ -n "$line" ]] || return 1
+  # Link forms markdown allows: plain `](path)` and `](<path>)` between
+  # angle brackets (mandatory for paths with spaces). The patterns live
+  # in variables — raw `<`/`>` inside `[[ =~ ]]` is a bash parse error.
+  # The pattern matches the line's first `](`, which is the item's
+  # link: the `- [ ]` checkbox contains no `](`.
+  if [[ "$line" =~ $re_angle ]]; then
+    link="${BASH_REMATCH[1]}"
+  elif [[ "$line" =~ $re_plain ]]; then
+    link="${BASH_REMATCH[1]}"
+  else
+    printf 'gubia: %s: first - [ ] has no task file link (malformed plan): %s\n' \
+      "$plan" "$line" >&2
+    exit 2
+  fi
+  # Trim whitespace around the path: `]( path )` is valid markdown.
+  # Trimming an already-clean string leaves it unchanged (idempotent).
+  link="${link#"${link%%[![:space:]]*}"}"
+  link="${link%"${link##*[![:space:]]}"}"
+  # Absolute link (`/…`): already resolved. Relative: composed onto the
+  # plan's absolute directory. Any `..` stays literal in the composed
+  # path — the filesystem resolves it; the consumer is open/`[[ -f ]]`,
+  # not string comparison.
+  dir="$(cd -- "$(dirname -- "$plan")" && pwd)"
+  if [[ "$link" == /* ]]; then
+    # shellcheck disable=SC2034 # consumed by the loop core (`run`,
+    # injected prompt), which arrives with its own subtasks.
+    run_active_task="$link"
+  else
+    # shellcheck disable=SC2034 # same as above.
+    run_active_task="${dir}/${link}"
+  fi
+}
+
+# Fixed header of the injected contract (`motor-contrato.md`, "Fixed
+# header"): the full text of the spec's markdown block, frozen here
+# **literally** — byte-identical on every iteration and for every
+# plan. Heredoc with a quoted delimiter (`<<'EOF'`): bash expands
+# nothing inside it, so `${GUBIA_PLAN}`/`${GUBIA_ROOT}` come out as raw
+# text (the path anchors travel through the child process's
+# environment, see `run_export_env`, never interpolated here), and no
+# accidental edit of the heredoc can smuggle an absolute path into what
+# the agent reads or copies into a versioned file. If the spec changes
+# the header, this block is edited by hand: it's engine text, not
+# configuration.
+run_contract_header() {
+  cat <<'EOF'
+## Loop instructions
+
+Each iteration executes **one single** action and stops. Do not chain tasks.
+
+Your plan file is `${GUBIA_PLAN}`, relative to `${GUBIA_ROOT}`
+(both variables are in your environment). Its content is pasted below. Links
+that appear inside the plan are relative to the **plan's directory**, not to
+your current working directory: always compose from `${GUBIA_ROOT}` before
+opening anything.
+
+1. **Locate the next subtask**:
+   - Walk the plan file top to bottom and find the first `- [ ]`.
+   - Every plan entry links to a task file: open it and look inside for the
+     first `- [ ]` subtask. There are no inline tasks in the plan.
+   - If no `- [ ]` remains anywhere → create `stop.md` in the plan's
+     directory, with a brief note ("plan complete, no pending subtasks") and
+     **stop**. That file is the signal the engine uses to stop; without it
+     the loop keeps iterating even when there's no work left.
+2. **Execute that single subtask**:
+   - Normal subtask: do it and mark it `[x]`.
+   - `[judge]` subtask: invoke the `judge` skill on the repository, passing it
+     the instructions from the task file. **Never skipped**: a `[judge]`
+     always consumes its iteration, even if you think it's already been
+     judged. If the `judge` skill isn't available in your harness, **stop**
+     without marking anything: don't improvise it.
+   - If the subtask consists of **adding** subtasks or creating a new task
+     file: add them and **don't execute them**; creating tasks is the single
+     action for the iteration.
+   - **Exception (work already done)**: if while inspecting the subtask you
+     discover it's already done, mark it `[x]` **naming concrete evidence on
+     the same line** (path, command, or artifact that proves it) and
+     continue with the next one in this same iteration. If you can't name
+     concrete evidence, the exception doesn't apply and the subtask consumes
+     the iteration normally. Maximum **3** consecutive skips: on the fourth,
+     stop.
+3. **Propagate upward**: after marking a subtask, if **all** of the task
+   file's subtasks are `[x]`, also mark its entry in the plan.
+4. **Success signal**: if and only if you completed the active subtask, end
+   your output with a line that is exactly `SUBTAREA_COMPLETADA=true` (alone
+   on its line). On failure, partial progress, or doubt, don't emit that
+   token.
+5. **Stop**. Don't look for the next subtask, don't chain iterations.
+EOF
+}
+
+# Composes the prompt injected on an iteration (`motor-contrato.md`,
+# "Composition: fixed header + `cat <plan>`. Nothing else"):
+#
+# - Fixed header: `run_contract_header`, byte-identical every time.
+# - Plan content: `cat` in **full** — no truncation (out goes the
+#   active-line truncation from the original Go, see "Changes from the
+#   original") and no concatenating task files: the agent navigates
+#   the plan on disk on its own (`GUBIA_ROOT`/`GUBIA_PLAN` in its
+#   environment), so no other file gets opened here.
+#
+# Writes to stdout: the invocation layer (`invoke_`, with its own
+# subtask) redirects this to wherever its CLI expects it. `cat`'s `--`
+# guards against plans whose name starts with `-`.
+run_prompt() {
+  local plan="$1"
+  run_contract_header
+  cat -- "$plan"
+}
+
+# Path of this plan's lockfile, set by `run_acquire_lock`. Empty
+# before acquisition. Exposed for task 05's EXIT trap ("never delete
+# the lockfile") and for tests, not for reassignment.
+run_lock_path=
+
+# Acquires the per-plan mutual-exclusion `flock` ("motor-decisiones.md",
+# "Concurrency"): two simultaneous loops over the same plan are two
+# agents editing `plan.md` and the `NN.md` files with no referee, and
+# `flock` is the atomic guarantee (the skill's preflight is best-effort
+# with a race between checking and launching).
+#
+# - `<slug>` = the plan's path relative to the root with `/`→`-`
+#   (`plan/plan.md` → `plan-plan.md`). The lock is **per plan**, not
+#   per repo: a fixed name would serialize two different plans in the
+#   same repository. Stripping the prefix reuses the guarantee from
+#   `run_resolve_plan` (`run_plan_abs` falls under `${run_root}/`), so
+#   the pattern always matches; the result is the same value
+#   `run_export_env` exports as `GUBIA_PLAN`.
+# - Spec formula: `exec 9>".gubia/<slug>.lock"; flock -n 9 ||
+#   exit 1`. Fd 9 stays open for the whole `run` process: the lock
+#   holds until the process dies, with no manual release to forget.
+#   `flock -n` doesn't wait: contention = immediate exit.
+# - Exit 1 (not 0) on contention: exit 0 is reserved for the loop's
+#   normal exits (stop file, max iterations), so they can be told apart
+#   from outside without reading the log.
+# - **The lockfile is never deleted** ("Agent invocation and process"):
+#   deleting it is the classic race (B opens, A deletes, C creates
+#   another, B and C lock different inodes). It stays there forever;
+#   no trap touches it.
+#
+# Called from the `run` path (`cmd_run`): `effort set` runs from
+# inside an iteration, with the engine blocked waiting on the agent —
+# taking the plan lock would self-deadlock the loop — and
+# `config validate` doesn't take it so it can validate with a loop
+# running.
+#
+# Guard: requires a prior `run_resolve_plan`, for the same reason as
+# `run_export_env`: a slug over empty paths would give a lockfile with
+# no plan, and contention would be checked against the wrong plan.
+
+run_acquire_lock() {
+  if [[ -z "$run_root" || -z "$run_plan_abs" ]]; then
+    printf 'gubia: run: lock acquisition before resolving the plan (run_resolve_plan missing)\n' >&2
+    exit 2
+  fi
+  local rel slug
+  rel="${run_plan_abs#"$run_root"/}"
+  slug="${rel//\//-}"
+  run_lock_path="${run_root}/.gubia/${slug}.lock"
+  # Explicit, idempotent `mkdir`: `exec 9>` doesn't create directories,
+  # and this function can't assume `state_ensure` already ran.
+  mkdir -p -- "${run_root}/.gubia"
+  exec 9>"$run_lock_path"
+  if ! flock -n 9; then
+    printf 'gubia: run: another loop is already running on this plan (lock busy: %s)\n' \
+      "$run_lock_path" >&2
+    exit 1
+  fi
+}
+
+# Path of this plan's stop file, set by `run_stop_requested` on each
+# check. Empty before the first one. Exposed for the stop message and
+# for tests, not for reassignment.
+run_stop_path=
+
+# Checks the stop signal (`motor-decisiones.md`, "Stop signal"): the
+# stop file is `stop.md` **next to the plan**, created by the agent
+# when no `- [ ]` remains (`motor-contrato.md`, step 1) and by the
+# judge in its two terminal cases (`judge.md`: 10th rejection and
+# Case C), and the engine checks it BEFORE each iteration.
+#
+# Before, not after: the file can appear halfway through the iteration
+# that just finished —the agent writes it from inside— and also
+# between two iterations —a judge from another process writes it—, so
+# the only check that guarantees no extra iteration gets spent is the
+# one that opens the next iteration. It's just an `[[ -f ]]`: it
+# doesn't read the content (the note is for the human) nor delete the
+# file (the signal must outlive the engine so `/gubia run`'s
+# monitoring can see it and diagnose it).
+#
+# The path is composed on `run_plan_abs`, never on the raw argument
+# nor on the cwd: `run_resolve_plan` already made it absolute with
+# `pwd -P`, and the process's cwd may not be the root by then.
+#
+# Guard: requires a prior `run_resolve_plan`, for the same reason as
+# `run_export_env` and `run_acquire_lock` — on an unresolved plan the
+# path would fall to `./stop.md` and the loop would watch a file that
+# isn't this plan's signal.
+#
+# Returns 0 if it must stop and 1 otherwise: it's a condition for the
+# loop's `if`, not an action. Stopping with exit 0 and with which
+# message is the caller's decision (`cmd_run`), which is the one that
+# knows the loop's normal exit.
+run_stop_requested() {
+  if [[ -z "$run_plan_abs" ]]; then
+    printf 'gubia: run: stop file check before resolving the plan (run_resolve_plan missing)\n' >&2
+    exit 2
+  fi
+  run_stop_path="$(dirname -- "$run_plan_abs")/stop.md"
+  [[ -f "$run_stop_path" ]]
+}
+
+# Rereads state at the start of every iteration
+# (`motor-decisiones.md`, "Local state (`state.env`)": the 6 keys are
+# reread at the start of every iteration). This isn't an optimization
+# to skip: `state.env` has TWO writers besides the startup read —the
+# agent via `gubia effort set` from inside the previous iteration, and
+# the engine itself when rotating `model_index`— and both write from a
+# process other than the one running the loop, or at a point after the
+# last read. Without rereading, the engine would start every iteration
+# with the state it saw at launch and the effort change the agent
+# requested would never take effect.
+#
+# `state_read` + `state_validate`, the same pair as startup (`main`),
+# and for the same reason: what was just read comes from a file an
+# agent writes, so it's validated before use — validating only at
+# startup would let in through this door exactly the values the
+# abort-on-invalid policy forbids.
+#
+# The two effects of the reread live inside `state_read` and aren't
+# repeated here: exporting the 6 keys and, if `effort_level` changed
+# from the previous reread, clearing the streak sentinel
+# (`state_prev_effort`/`state_streak_index`) — this call is the only
+# point where the `run` process sees the new level.
+#
+# Doesn't call `state_ensure`: the file already exists (startup
+# guarantees it) and recreating it here with defaults would turn a
+# mid-loop deletion into a silent effort change.
+#
+# The range guard for `model_index` against the active list's length
+# (`state_guard_model_index`) isn't called yet: that length is known by
+# the already-sourced catalog, and what resolves the active list is
+# the iteration's agent selection, which arrives with its own
+# subtask; that's the point where the guard hooks in.
+run_reload_state() {
+  state_read
+  state_validate
+}
+
+# Streak sentinel, memory of the `run` process
+# (`motor-decisiones.md`, "Model rotation": "the `model_index` of the
+# first failure is saved"). Called after a non-zero exit of the
+# invocation and BEFORE rotating: the index that opens the streak is
+# the one of the model that just failed, not the one it rotates to next.
+#
+# Only the FIRST failure writes. A non-empty `state_streak_index` is an
+# already-open streak, and overwriting it on every failure would move
+# the target forward at the same pace as `model_index`: the full loop
+# back through the list would never be detected and `fallback-exhausted`
+# would never trigger. That's why the second failure and subsequent ones
+# are a no-op, and the mark is only cleared from outside: an iteration
+# success (`run_streak_reset`, below) or the `effort_level` change that
+# `state_read` detects on the start-of-iteration re-read.
+#
+# The index arrives as an argument instead of being read from
+# `$model_index`: the caller has the value of the iteration that
+# failed, so the mark doesn't depend on the order relative to
+# `state_rotate_model_index`.
+#
+# In memory and only in memory: `state.env` persists what survives an
+# engine death, and a streak in progress isn't that — an engine that
+# restarts begins with no streak, by design.
+run_streak_mark() {
+  local index="$1"
+  [[ -z "$state_streak_index" ]] || return 0
+  state_streak_index="$index"
+}
+
+# Reset the streak sentinel on iteration success
+# (`motor-decisiones.md`, "Model rotation": the streak that aborts
+# with `fallback-exhausted` is that of consecutive failures **with no
+# success in between**). Called by the loop after a zero exit of the
+# invocation.
+#
+# What matters is the streak of consecutive failures, not the total
+# failure count: a zero exit in between proves that the model just
+# worked with is still alive, so returning to the saved index no
+# longer means "all models are exhausted," and keeping the mark would
+# abort a healthy loop. It's cleared without looking at the current
+# index — any success, with whichever model, closes the streak — and
+# it's idempotent: calling it with no open streak is a no-op.
+#
+# The other reset trigger, the `effort_level` change, isn't here:
+# `state_read` detects it on the start-of-iteration re-read, which is
+# the only point where the `run` process sees the new level written by
+# the agent from another process (`gubia effort set`). Two triggers,
+# two locations; the state cleared is the same.
+#
+# `model_index` is untouched: success doesn't reorder the fallback
+# list, it only closes the streak. The next iteration continues with
+# the model that just worked (only failure rotates, via
+# `state_rotate_model_index`).
+run_streak_reset() {
+  state_streak_index=
+}
+
+# Abort on fallback list exhaustion
+# (`motor-decisiones.md`, "Model rotation": "if it returns to it with
+# no iteration having succeeded in between, abort with
+# `fallback-exhausted` and a non-zero exit"). Called by the loop after
+# rotating, with the index the rotation just landed on.
+#
+# Returning to the index that opened the streak means the loop through
+# the list is complete: every model in the active level has been
+# tried since the first failure and none returned a zero exit.
+# Continuing to rotate would only repeat the same loop burning money,
+# so the engine stops and lets `/gubia run`'s monitoring diagnose it.
+#
+# Checked BEFORE spending the next iteration, not after the model at
+# the saved index fails again: that model's first failure is already
+# observed (it's the one that opened the streak) and repeating it adds
+# no new information. With a single-model list this is exactly
+# correct: it rotates to itself and aborts after that single failure,
+# without retrying in an infinite loop.
+#
+# The check is an equality against the sentinel, not a failure
+# counter: `state_read` may have cleared the streak due to an
+# `effort_level` change (indices from different lists), and a counter
+# would keep counting failures from lists that aren't comparable to
+# each other. With no open streak (`state_streak_index` empty) it's a
+# no-op.
+#
+# Exit 3, not 2 or 1: `motor-decisiones.md` reserves exit 0 for normal
+# exits "so they can be told apart from outside without reading the
+# log," and that same logic separates the aborts from each other — 1
+# is `flock` contention, 2 is invalid configuration or usage
+# (`state_validate`, corrupt catalog, non-executable CLI), and fallback
+# exhaustion is neither: the engine was set up correctly and it was
+# the models that didn't respond. `/gubia run`'s diagnosis classifies
+# exactly that reason (`gubia-run.md`, step 4) and with its own code it
+# doesn't need to read the log to recognize it.
+#
+# Message on stderr, like everything that isn't the engine's clean
+# stdout, naming the index, the level and the list: without those
+# three pieces of data, `fallback-exhausted` doesn't say which list
+# ran out.
+run_streak_check() {
+  local index="$1"
+  [[ -n "$state_streak_index" ]] || return 0
+  ((index == state_streak_index)) || return 0
+  printf 'gubia: run: fallback-exhausted: rotation has returned to model_index=%d of the first failure with no successful iteration in between (effort_level=%s, fallback_list=%s): every model in the level has failed\n' \
+    "$index" "${effort_level:-?}" "${fallback_list:-?}" >&2
+  exit 3
+}
+
+# Exit code of the last agent invocation, captured by
+# `run_invoke_iteration`. Empty before the first iteration. It's the
+# value the rotate-or-continue decision interprets (its own subtask):
+# exposed as a module variable and not via `return` because the
+# agent's rc is data about the iteration, not the function's own
+# result — returning it would make a non-zero agent rc look like a
+# failure of the capture itself under `set -e`.
+run_iteration_rc=
+
+# Result of resolving the catalog's active entry. Kept in process
+# variables (instead of stdout) because the next consumer needs both
+# the function name and the model, and a command substitution would
+# lose any state the resolution needs to leave prepared. Empty before
+# the first resolution so a failure never reuses a previous
+# iteration's result.
+run_resolved_agent_fn=
+run_resolved_model=
+
+# Resolves a fallback list entry for a level to the catalog function
+# that implements it and the model identifier that function receives.
+# `config/agents.sh` is already sourced by `cmd_run` when this is
+# used: its lists contain `GUBIA_MODELS` keys, and each map value is
+# the literal pair "agent model".
+#
+# The index arrives explicit so the selection is a pure operation over
+# the just-reread state: rotation keeps the index that failed until
+# the invocation ends. The range guard doesn't live here yet; that's
+# `state_guard_model_index`'s non-aborting policy. A fallback key with
+# no model entry, or an agent with no function, is a broken catalog,
+# though: there's no invocation that can be built, so it aborts with
+# exit 2.
+run_resolve_agent() {
+  local active_effort="$1" active_index="$2" list_name key entry agent model
+  run_resolved_agent_fn=
+  run_resolved_model=
+  list_name="GUBIA_FALLBACK_${active_effort^^}"
+
+  if ! declare -p "$list_name" >/dev/null 2>&1; then
+    printf 'gubia: run: catalog does not define %s (fallback list for the active level)\n' \
+      "$list_name" >&2
+    exit 2
+  fi
+  local -n list="$list_name"
+  key="${list[$active_index]}"
+  if [[ -z "${GUBIA_MODELS[$key]+set}" ]]; then
+    printf 'gubia: run: model %s from the active fallback list is not defined in GUBIA_MODELS\n' \
+      "$key" >&2
+    exit 2
+  fi
+  entry="${GUBIA_MODELS[$key]}"
+  agent="${entry%% *}"
+  model="${entry#* }"
+  if ! declare -F "agent_${agent}" >/dev/null; then
+    printf 'gubia: run: model %s requires agent_%s, but the catalog does not define that function\n' \
+      "$key" "$agent" >&2
+    exit 2
+  fi
+  run_resolved_agent_fn="agent_${agent}"
+  run_resolved_model="$model"
+}
+
+# Invocation of the active agent in a loop iteration
+# (`motor-decisiones.md`, "Agent invocation and process"), capturing
+# its exit code in the ORDER the spec sets:
+# `wait` -> check `INTERRUPTED` -> decide.
+#
+# 1. `wait`: inside `invoke_agent` (task 05), which launches the agent
+#    with `setsid` and waits for it to finish. The `rc=0; … || rc=$?`
+#    guard is mandatory: without it `set -e` would kill the engine on
+#    the agent's first failure, which is exactly the case the loop
+#    exists to handle (rotating models). The only rc that never
+#    reaches here is 126/127 — `invoke_rc_die`, inside `invoke_agent`,
+#    does an immediate `die` without rotating.
+# 2. Check `INTERRUPTED` (`invoke_interrupted`, set by the SIGINT trap
+#    the instant the signal arrives) BEFORE interpreting `rc`: an
+#    interruption mid-`wait` produces a non-zero rc (typically 130)
+#    that's indistinguishable from an agent failure if only the number
+#    is looked at. Without this check the engine would rotate models
+#    and persist the new index to `state.env` over a user's Ctrl-C,
+#    not a model failure — and with the streak sentinel running, a few
+#    interruptions in a row would abort the loop with a false
+#    `fallback-exhausted`. The normal interruption path doesn't go
+#    through here (the trap re-raises the signal and the process dies
+#    inside `wait`); this covers the case where the flag is set and
+#    control returns anyway, and there the right thing is to stop
+#    without interpreting anything. Exit 130 (shell convention for
+#    "terminated by SIGINT"), which doesn't collide with the engine's
+#    own codes: 1 `flock` contention, 2 invalid configuration or
+#    usage, 3 `fallback-exhausted`.
+# 3. Decide: it is NOT decided here. The captured rc is left in
+#    `run_iteration_rc` and the next loop subtask decides whether to
+#    rotate or continue. This function only guarantees a clean rc
+#    arrives, uncontaminated by an interruption.
+#
+# Before launching, the function/model pair is resolved from the
+# `model_index` entry of the active level's fallback list. That way
+# rotation doesn't just move an index: it selects the actual CLI that
+# runs the next round. `agent_probe` remains available for catalog
+# testing, but it isn't the loop's default.
+#
+# The iteration number arrives as an argument: it's the prefix of the
+# `.gubia/logs/` files (`<iter>.prompt`, `.out`, `.err`), so each round
+# of the loop writes its own and doesn't overwrite the previous
+# observation.
+run_invoke_iteration() {
+  local iter="$1" rc=0
+  run_resolve_agent "$effort_level" "$model_index"
+  invoke_agent "$run_resolved_agent_fn" "$run_resolved_model" "$effort_level" "$thinking" "$iter" || rc=$?
+  if [[ -n "$invoke_interrupted" ]]; then
+    printf 'gubia: run: interrupted by signal during iteration %s: stopping without interpreting the agent exit code (%d) or rotating models\n' \
+      "$iter" "$rc" >&2
+    exit 130
+  fi
+  run_iteration_rc="$rc"
+}
+
+# Length of the active level's fallback list, read from the catalog
+# already sourced (`config/agents.sh`: `GUBIA_FALLBACK_LOW|MEDIUM|HIGH`).
+#
+# Lives in `run_` and not in `state_` on purpose: `state_` receives the
+# length as an argument and never sources global config (project
+# decision, noted in `tests/state_model_index.bats`). The loop is the
+# one that knows the catalog — it already sourced it at startup.
+#
+# The array name is composed from `effort_level`, which `state_validate`
+# has already constrained to `low|medium|high`, so the indirection can't
+# point at an arbitrary name.
+#
+# Catalog missing that array: length `0` with a warning, not `die`. This
+# is the same policy `state_rotate_model_index` applies to the
+# degenerate list, and for the same reason — the engine must not die
+# over a list it can't traverse; the caller decides what to do with the
+# `0` (here, don't rotate). The length is emitted via the function's
+# stdout because bash doesn't return integers via `return` without
+# truncating them to 8 bits, and the subshell isn't a problem: there are
+# no contract variables to fill (unlike `agents.sh` functions).
+run_active_len() {
+  local name="GUBIA_FALLBACK_${effort_level^^}"
+  if ! declare -p "$name" >/dev/null 2>&1; then
+    printf 'gubia: run: catalog does not define %s (active level fallback list): length 0\n' \
+      "$name" >&2
+    printf '0\n'
+    return 0
+  fi
+  local -n list="$name"
+  printf '%s\n' "${#list[@]}"
+}
+
+# Decision to rotate or continue based on the iteration's exit code
+# (`motor-decisiones.md`, "Model rotation"). This is the link between
+# the rc captured by `run_invoke_iteration` and the three pieces
+# already implemented: circular rotation (`state_rotate_model_index`),
+# streak sentinel (`run_streak_mark`/`run_streak_reset`) and abort
+# (`run_streak_check`).
+#
+# - rc 0: the iteration went well. The streak is closed
+#   (`run_streak_reset`) and it does NOT rotate: the fallback list
+#   exists to flee a failing model, and the one that just worked is
+#   exactly the one to keep using.
+# - rc ≠ 0: the sentinel is marked with the index that failed BEFORE
+#   rotating (the one that opens the streak is the model that failed,
+#   not the next one), it rotates, and the index the rotation landed on
+#   is checked against the mark's index: if it matches, the list has
+#   gone all the way around without a single success in between and
+#   `run_streak_check` aborts with `fallback-exhausted` (exit 3).
+#
+# Exit codes 126/127 never reach here: `invoke_rc_die` (inside
+# `invoke_agent`, task 05) does an immediate `die` — a CLI that doesn't
+# exist or isn't executable is broken configuration, and rotating
+# models would walk the entire list repeating the same installation
+# error. Nor does a signal interruption reach here: `run_invoke_iteration`
+# checks the `INTERRUPTED` flag before leaving the rc, and stops without
+# interpreting it (a Ctrl-C must not rotate models or feed the streak).
+#
+# Degenerate active list (length `0`, catalog missing the level's
+# array): continue without rotating and without touching the sentinel.
+# Marking and rotating there would leave the index at `0` and the next
+# check would match the mark, aborting with a false
+# `fallback-exhausted` — the list hasn't been exhausted, there simply
+# is no list.
+run_decide_rotation() {
+  local rc="$1" index="$2" active_len="$3"
+  if ((rc == 0)); then
+    run_streak_reset
+    return 0
+  fi
+  if ((active_len <= 0)); then
+    printf 'gubia: run: agent exit %d with the active fallback list empty: continuing without rotating models\n' \
+      "$rc" >&2
+    return 0
+  fi
+  run_streak_mark "$index"
+  state_rotate_model_index "$active_len"
+  run_streak_check "$model_index"
+}
+
+# Detects, once before the loop, the tools that vary between machines
+# (`motor-decisiones.md`, "Agent invocation and process" + gotcha
+# "detect once in a `require_tools` before the loop, not on iteration
+# 47"): today, `systemd-run` for the memory limit (`invoke_prepare`
+# builds the prefix with it).
+#
+# - `systemd-run` missing is NOT abortive (`motor-decisiones.md`): a
+#   stderr warning **only once** (the state variable avoids repeating
+#   it per iteration) and it runs without a memory limit. Never
+#   `ulimit -v` as a substitute (documented gotcha: SIGSEGV instead of
+#   OOM, and it would rotate models over a badly set limit).
+# - The detection is for a **command in the PATH** (`command -v`), not
+#   for available cgroups: a `systemd-run` present but unusable (a
+#   session without systemd) shows up as rc≠0 of the invocation and is
+#   already interpreted by the task 06 loop; duplicating that check
+#   here would be a fallback of a fallback.
+# - Instance variables of the `run` process (not persisted): consumed
+#   by `invoke_prepare`, which only builds the `systemd-run` prefix
+#   when `invoke_systemd_run=yes`.
+invoke_systemd_run=
+invoke_tools_checked=
+
+require_tools() {
+  # Idempotent: the extra call is free, and a second stderr warning
+  # would be exactly what the spec forbids.
+  [[ -z "$invoke_tools_checked" ]] || return 0
+  invoke_tools_checked=yes
+  if command -v systemd-run >/dev/null 2>&1; then
+    invoke_systemd_run=yes
+  else
+    invoke_systemd_run=
+    printf 'gubia: run: systemd-run not available in PATH: the iteration will run without a memory limit (memory_max=%s ignored)\n' \
+      "${memory_max:-}" >&2
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# invoke_: invocation of the active agent and process management
+#
+# `motor-decisiones.md`, "Agent invocation and process": `setsid` +
+# closed stdin + stdout/stderr to separate files under `.gubia/logs/`,
+# with the group PID kept in memory for the group shutdown
+# (`kill -TERM -<PGID>`, task 05, own subtask). The memory limit
+# (`systemd-run --user --scope -p MemoryMax=`) is built in
+# `invoke_prepare` and wraps the invocation in `invoke_agent`; the
+# re-read of the contract arrives with task 06.
+# ---------------------------------------------------------------------------
+
+# Invocation prefix for the memory limit (`motor-decisiones.md`,
+# "Agent invocation and process", "Memory limit" point): empty = no
+# limit; with `systemd-run` detected, `systemd-run --user --scope -p
+# MemoryMax=<value>` — the spec's literal formula. Set by
+# `invoke_prepare` before launch (synchronous, like all preparation:
+# variable assignment inside `( … ) &` doesn't escape the job's
+# subshell, so the prefix can't be decided at the launch point).
+# Exposed to tests; the layer above doesn't reassign it.
+invoke_prefix=()
+
+# Normalizes the catalog's contract (`config/agents.sh`: argv/env/
+# modes) onto the global invocation variables, BEFORE launching: the
+# background launch can't build anything (variable assignment from a
+# `$(...)` inside `( cmd ) &` doesn't escape the job's subshell), so
+# all preparation is synchronous and fails fast with its own message —
+# a half-built invocation never reaches `setsid`.
+#
+# - `GUBIA_PROMPT_MODE='stdin'`: the prompt is composed into a file and
+#   the child's fd 0 is opened from it. It's the **agent's** stdin, not
+#   the engine's: the engine never lends it its own stdin (if it did,
+#   the agent would eat it). `</dev/null` as a fallback for the file
+#   doesn't apply: `run_prompt` doesn't fail on an already-resolved
+#   plan, and if it failed, the iteration must not start — aborting
+#   here is correct.
+# - `GUBIA_PROMPT_MODE='file'` (omp, devin): the agent receives the
+#   file path via argv ({prompt_file}); the child's fd 0 is indeed
+#   `</dev/null` — there's no prompt to feed in, and without this the
+#   agent would inherit the engine's stdin.
+# - `GUBIA_ENV`: exported with `export KEY=VALUE` per entry. There's no
+#   route via a single `env(1)`: `env -i` would erase `GUBIA_ROOT`/
+#   `GUBIA_PLAN` (the agent contract requires them in its environment)
+#   and `env` without `-i` is a copy of the environment with a prefix —
+#   exporting directly is the same without an extra process.
+# - `GUBIA_OUTPUT_MODE='file'` (codex): the agent writes its output to
+#   its own file (`-o <console_output>` in its argv). After waiting for
+#   the process, `invoke_agent` normalizes that file into `.out`, which
+#   is the observation the later layers consume just like the other
+#   agents' stdout.
+invoke_prepare() {
+  local agent_fn="$1" model="$2" effort="$3" thinking="$4" iter="$5"
+  local prompt_file
+
+  # The two files that some catalog functions receive as arguments must
+  # exist (the prompt) or have a definitive path (the output) BEFORE
+  # building their argv. The prompt can't just be appended at the end of
+  # GUBIA_ARGV: omp and devin wire it in with their own flags, and codex
+  # instead receives the destination of its console output.
+  prompt_file="${run_root}/.gubia/logs/${iter}.prompt"
+  invoke_console_output_path="${run_root}/.gubia/logs/${iter}.console"
+  run_prompt "$run_plan_abs" >"$prompt_file"
+  invoke_stdout_path="${run_root}/.gubia/logs/${iter}.out"
+  invoke_stderr_path="${run_root}/.gubia/logs/${iter}.err"
+
+  # The signatures are deliberately the catalog's, not an artificial
+  # engine interface. Test agents and local catalogs keep the historical
+  # three-argument signature; only the four real CLIs have contracts with
+  # different arities.
+  case "$agent_fn" in
+    agent_codex)
+      "$agent_fn" "$model" "$effort" "$thinking" "$invoke_console_output_path"
+      ;;
+    agent_claude)
+      "$agent_fn" "$model" "$effort" "$thinking"
+      ;;
+    agent_omp)
+      "$agent_fn" "$model" "$effort" "$thinking" "$prompt_file"
+      ;;
+    agent_devin)
+      "$agent_fn" "$model" "$prompt_file"
+      ;;
+    *)
+      "$agent_fn" "$model" "$effort" "$thinking"
+      ;;
+  esac
+  case "${GUBIA_PROMPT_MODE:-}" in
+    stdin|file) ;;
+    *)
+      printf 'gubia: run: %s: invalid GUBIA_PROMPT_MODE: %s\n' \
+        "$agent_fn" "${GUBIA_PROMPT_MODE:-}" >&2
+      exit 2
+      ;;
+  esac
+  if [[ "${GUBIA_OUTPUT_MODE:-}" != 'stdout' && "${GUBIA_OUTPUT_MODE:-}" != 'file' ]]; then
+    printf 'gubia: run: %s: invalid GUBIA_OUTPUT_MODE: %s\n' \
+      "$agent_fn" "${GUBIA_OUTPUT_MODE:-}" >&2
+    exit 2
+  fi
+  # Memory limit (`motor-decisiones.md`, "Memory limit"): with
+  # `systemd-run` detected by `require_tools` AND a `memory_max`
+  # configured, the invocation is wrapped with the spec's literal
+  # formula — `systemd-run --user --scope -p MemoryMax=<value>`. In any
+  # other case (tool absent or `memory_max` empty = limit disabled) the
+  # prefix stays empty and the agent runs unwrapped: never a substitute
+  # `ulimit -v` (documented gotcha: RLIMIT_AS kills with SIGSEGV instead
+  # of OOM and would rotate model over a misconfigured limit), and never
+  # a `MemoryMax=` with an empty value (invalid cgroup assignment).
+  #
+  # The wrapper order is `setsid systemd-run … -- <agent>`: `--scope`
+  # runs the command IN ITS OWN PROCESS (no fork, no new session), so the
+  # PID saved by `invoke_agent` stays PID == PGID == SID of the group
+  # that contains the agent — this same task's group-based shutdown
+  # keeps pointing at the right group — and the agent's exit code reaches
+  # `wait` unchanged (verified: `setsid systemd-run --user --scope -q -p
+  # MemoryMax=8G -- sh -c 'exit 42'` → `wait` rc=42, child's pgid ==
+  # saved $!). The reverse order (`systemd-run setsid …`) would break
+  # both guarantees.
+  #
+  # `-q`: without it, `systemd-run` writes its "Running as unit" banner
+  # to stderr, which would land in the agent's `.err` file and
+  # contaminate the iteration's observation — the captured stderr must
+  # be only the agent's. The spec fixes the limit formula (`--user
+  # --scope -p MemoryMax=`); the silence is a requirement of this
+  # layer's own capture contract, not a free option (the original ralph
+  # carries `-q` for the same reason).
+  invoke_prefix=()
+  if [[ "$invoke_systemd_run" == yes && -n "${memory_max:-}" ]]; then
+    invoke_prefix=(systemd-run --user --scope -q -p "MemoryMax=${memory_max}")
+  fi
+}
+
+# Short grace margin, in seconds, between `TERM` and `KILL` to the
+# agent's group (`motor-decisiones.md`, "Agent invocation and process":
+# "short wait"). Module-level variable — not `state.env` —: it's
+# intrinsic to process handling, and tests can lower it after sourcing
+# so they don't wait out the full margin on a stubborn orphan.
+invoke_term_grace=5
+
+# Shutdown of the agent's process group (`motor-decisiones.md`, "Agent
+# invocation and process"): `kill -TERM -<PGID>`, a short wait polling
+# whether anyone in the group is still alive, and `kill -KILL -<PGID>`
+# only if the group is still alive once the margin runs out. Without the
+# `--kill-after` that `timeout(1)` used to give (v1 has no per-iteration
+# timeout), the guarantee that the group dies even if it ignores SIGTERM
+# is hand-written here — the spec's literal formula.
+#
+# The GROUP is killed, never just the parent process: the agent's CLI
+# spawns subprocesses (MCP servers, `git`) that outlive the parent and
+# would keep writing to the plan files during the next iteration,
+# corrupting exactly what the integrity detector watches. For the same
+# reason, the target is always signed by PGID, never by name or
+# pattern: `pkill`/`killall` are forbidden ("gubia-run.md", hard rules)
+# — a process that matched the engine by name would die along with the
+# entire loop.
+#
+# Cheap no-op when the group is already dead (normal end with no
+# orphans): the `TERM` fails and returns without waiting for anything,
+# so calling it at the end of EVERY iteration costs nothing when it's
+# not needed and saves the plan's integrity when it is.
+invoke_kill_group() {
+  local pgid="$1" deadline
+  kill -TERM -"$pgid" 2>/dev/null || return 0
+  deadline=$((SECONDS + invoke_term_grace))
+  while kill -0 -"$pgid" 2>/dev/null; do
+    if ((SECONDS >= deadline)); then
+      break
+    fi
+    sleep 0.1
+  done
+  kill -0 -"$pgid" 2>/dev/null || return 0
+  kill -KILL -"$pgid" 2>/dev/null || true
+}
+# Exit codes that never rotate (`motor-decisiones.md`, "Differentiated
+# exit codes"): 126/127 is "CLI not executable / not found", an
+# environment failure that no model on the list is going to recover
+# from. Rotating would burn through the whole list in seconds (every
+# attempt dies the same way) and would trip the streak sentinel with a
+# false diagnosis (`fallback-exhausted` for "all models failed", when
+# what actually failed was PATH). On that rc, immediate `die` with
+# exit 2 and a clear stderr; any other non-zero rc is an agent failure
+# and is returned as-is — interpreted by task 06's rotation, never
+# here.
+#
+# Propagation verified empirically (this subtask's evidence):
+# `( exec setsid -- <cli> … ) &` + `wait` returns the agent's rc
+# unchanged — 126 (exists but not executable), 127 (doesn't exist) and
+# an arbitrary exit (42) all reach `wait` intact. With `invoke_prefix`'s
+# `systemd-run` wrapper the split changes: `--scope` runs the command
+# in its own process, and it's systemd-run itself that fails to find
+# the executable — it dies with rc 1 and an unambiguous stderr
+# ("Failed to find executable …") BEFORE creating the scope. That's why
+# there's no special case for the wrapper's rc 1: the agent's genuine
+# 126/127 is only observable when launching without `systemd-run`
+# (tool absent or `memory_max` empty), and the wrapper already aborts
+# on its own with a better diagnosis than the engine could build here.
+invoke_rc_die() {
+  local rc="$1"
+  case "$rc" in
+    126|127)
+      printf 'gubia: run: agent is not executable or not found (exit %d): invocation CLI: %s — iteration stderr at %s\n' \
+        "$rc" "${GUBIA_ARGV[0]-?}" "${invoke_stderr_path:-?}" >&2
+      exit 2
+      ;;
+  esac
+  return "$rc"
+}
+
+# Signal-interruption flag, set by the SIGINT trap the instant the
+# signal arrives. Task 06's loop checks it AFTER `wait` and BEFORE
+# interpreting `rc` ("INTERRUPTED is checked before interpreting rc":
+# the order is `wait` → check the flag → only then decide whether to
+# rotate) — a manually interrupted SIGINT produces rc=130 from `wait`,
+# and without this flag the loop would rotate model and persist the new
+# index over a user interruption, not an agent failure.
+invoke_interrupted=
+
+# Reentrancy guard for the SIGINT trap: bash doesn't reenter a trap (a
+# signal arriving while the handler runs stays pending and re-fires
+# when it finishes), but if reentry happens through any path, the
+# second pass doesn't repeat the group shutdown or the re-raise — the
+# flag cuts the handler off at its first line.
+invoke_int_trap_active=
+
+# SIGINT trap for the `run` process (`motor-decisiones.md`,
+# "Agent invocation and process": "the signal trap re-raises the
+# signal").
+#
+# Body order, every step matters:
+#
+# 1. Reentrancy guard.
+# 2. `invoke_interrupted=yes`: the current iteration's `wait` is about
+#    to return 130 because of the signal; the flag is what stops task
+#    06 from interpreting that as an agent failure and rotating.
+# 3. Kill the agent's group if one is alive: `setsid` put the agent in
+#    another session, so the terminal's Ctrl-C does NOT reach it — the
+#    engine kills it here, deliberately and completely (same
+#    `invoke_kill_group` as end-of-iteration; with the group already
+#    dead it's a no-op). The PGID stays exposed on purpose until after
+#    the normal shutdown (`invoke_agent`), so the trap still points at
+#    the right group even if the signal arrives mid-`wait`.
+# 4. `trap - INT; kill -INT "$$"`, never `exit 130`: with the trap
+#    disarmed the signal reaches the process with its default
+#    disposition and the process dies BY SIGINT — the parent
+#    distinguishes "killed by interruption" (WIFSIGNALED) from a clean
+#    exit, which is exactly what `exit 130` would hide.
+#
+# Doesn't touch the lockfile or anything under `.gubia/`: "never delete
+# the lockfile in the trap" (fd 9, opened by `run_acquire_lock`, only
+# releases the `flock` when the process dies, which happens right
+# here).
+invoke_trap_int() {
+  [[ -z "$invoke_int_trap_active" ]] || return 0
+  invoke_int_trap_active=yes
+  invoke_interrupted=yes
+  if [[ -n "${invoke_agent_pgid:-}" ]]; then
+    invoke_kill_group "$invoke_agent_pgid"
+  fi
+  trap - INT
+  kill -INT "$$"
+}
+
+# Reentrancy guard for the EXIT trap: same contract as SIGINT's. bash
+# doesn't reenter the EXIT trap on its own (including death by
+# re-raised signal — verified: the EXIT trap runs after
+# `invoke_trap_int`'s `kill -INT "$$"`), but if reentry happens through
+# any path, the second pass doesn't repeat the group shutdown or the
+# `exit` — the flag cuts the handler off at its second line, right
+# after capturing `$?`.
+invoke_exit_trap_active=
+
+# EXIT trap for the `run` process (`motor-decisiones.md`, "Agent
+# invocation and process": "the EXIT trap captures `$?` on its first
+# line, and both traps carry a reentrancy guard").
+#
+# Body order, every step matters:
+#
+# 1. `local rc=$?` ON THE FIRST LINE: any prior command — including the
+#    reentrancy guard, which is a `[[ ]]` and as such clobbers `$?` —
+#    would destroy the exit code the trap must preserve. The guard
+#    comes after, once the rc is safe in a local; its `return` doesn't
+#    touch the pending status (verified: returning from an EXIT trap
+#    preserves the original exit status).
+# 2. Reentrancy guard.
+# 3. Kill the agent's group if one is alive: covers an exit through a
+#    path other than end-of-iteration or the SIGINT trap (e.g. a future
+#    `die` while `wait` is in progress). With the group already
+#    dead — the normal case: `invoke_agent` and `invoke_trap_int`
+#    already closed it — it's a cheap no-op.
+# 4. `exit "$rc"` re-emits the captured code: an EXIT trap that ends
+#    its body overwrites the process's exit status with its own
+#    (verified: `trap 'true' EXIT; exit 42` exits 42 only because the
+#    handler doesn't call `exit`; a handler that runs a failing command
+#    without re-emitting replaces the 42 with its own rc). Without this
+#    `exit`, a `die` or an iteration's `rc` would reach the parent
+#    deformed. On death by re-raised signal (`invoke_trap_int`) the
+#    `exit` is harmless: bash dies BY the signal anyway (verified),
+#    which is exactly what the parent must see.
+#
+# Doesn't touch the lockfile or anything under `.gubia/`: "never delete
+# the lockfile in the trap" — fd 9, opened by `run_acquire_lock`,
+# releases the `flock` when the process dies and the file stays on
+# disk forever. `run_lock_path` remains an exposed variable for tests,
+# not something to delete here.
+invoke_trap_exit() {
+  local rc=$?
+  # Observable evidence of the first-line capture (tests): only signs
+  # when the test exports GUBIA_EXIT_TRAP_MARKER, and AFTER the guard —
+  # a second, guarded entry doesn't repeat even the signature ("doesn't
+  # repeat its effects"). In production the variable isn't set and this
+  # is a no-op; the local `rc` is already safe and the `if` doesn't
+  # touch it.
+  if [[ -n "${GUBIA_EXIT_TRAP_MARKER:-}" && -z "$invoke_exit_trap_active" ]]; then
+    printf 'exit-trap rc=%d\n' "$rc" >>"$GUBIA_EXIT_TRAP_MARKER"
+  fi
+  [[ -z "$invoke_exit_trap_active" ]] || return 0
+  invoke_exit_trap_active=yes
+  if [[ -n "${invoke_agent_pgid:-}" ]]; then
+    invoke_kill_group "$invoke_agent_pgid"
+  fi
+  exit "$rc"
+}
+
+# Installs the SIGINT trap in the `run` process. A separate function
+# so tests can install and fire the trap on the sourced script without
+# launching the whole engine. Only `cmd_run` calls it: neither
+# `effort set` (runs inside an iteration, with no child process to
+# manage) nor `config validate` handle agent processes. Also installs
+# the EXIT trap: `run`, which already manages a child process, is the
+# only path that can die leaving a live group or an rc to preserve.
+invoke_install_traps() {
+  trap invoke_trap_int INT
+  trap invoke_trap_exit EXIT
+}
+
+# Launches the active agent and waits for it to finish ("Agent
+# invocation and process"; `motor-decisiones.md` gotcha: `rc=0; … ||
+# rc=$?`, never trust `set -e` with the invocation).
+#
+# Signed with a subshell `( … ) &`:
+#
+# - The subshell dies as soon as it runs the `exec`-equivalent that is
+#   `setsid` (fork+exec in a single step): `$!` holds the `setsid`
+#   PID, and since `setsid` launches a NEW session with no live
+#   intermediate process, PID == PGID == SID of the child — the saved
+#   PID IS the PGID that group shutdown needs. Without the subshell
+#   wrapper, an interactive `setsid cmd &` would fork (setsid(2) fails
+#   on the group leader) and `$!` would point at the parent setsid, not
+#   the agent.
+# - There's no intermediate process to wait on: `wait "$pid"` waits for
+#   the agent and returns ITS exit code (the empirical verification of
+#   this behavior — `setsid sh -c 'exit 42'` → `wait` rc=42 — is in the
+#   subtask's evidence).
+# - `setsid` isolates the agent from the engine's group: a signal to
+#   the loop (Ctrl-C in the terminal) doesn't leave the agent half
+#   stopped — the engine's group shutdown kills it, deliberately and
+#   completely
+# - Child's stdin: `/dev/null` in 'file' mode, the prompt file in
+# 'stdin' mode — the agent's fd 0 belongs to the agent, never to the
+# engine.
+invoke_agent() {
+  local agent_fn="$1" model="$2" effort="$3" thinking="$4" iter="$5" pid rc
+  invoke_prepare "$agent_fn" "$model" "$effort" "$thinking" "$iter"
+  (
+    # Catalog `env`: KEY=VALUE pairs exported HERE, inside the launch
+    # job — the child inherits them and the `run` process's environment
+    # stays unmutated for the rest of the session (the example's claude
+    # would export CLAUDE_CODE_EFFORT_LEVEL and it would stick to the
+    # engine). The `${#GUBIA_ENV[@]}` guard (not `${GUBIA_ENV[@]-}`):
+    # under `set -u` the alternative produces one empty element over an
+    # empty array, and `export ''` blows up.
+    if (( ${#GUBIA_ENV[@]} > 0 )); then
+      local pair
+      for pair in "${GUBIA_ENV[@]}"; do
+        # shellcheck disable=SC2163 # intentional dynamic export: $pair
+        # is a catalog KEY=VALUE pair, same as state_read's per-key
+        # export.
+        export "$pair"
+      done
+    fi
+    if [[ "$GUBIA_PROMPT_MODE" == 'stdin' ]]; then
+      exec setsid ${invoke_prefix+"${invoke_prefix[@]}"} -- "${GUBIA_ARGV[@]}" \
+        <"${run_root}/.gubia/logs/${iter}.prompt" \
+        >"$invoke_stdout_path" 2>"$invoke_stderr_path"
+    else
+      exec setsid ${invoke_prefix+"${invoke_prefix[@]}"} -- "${GUBIA_ARGV[@]}" \
+        </dev/null \
+        >"$invoke_stdout_path" 2>"$invoke_stderr_path"
+    fi
+  ) &
+  pid=$!
+  # PID and PGID of the active agent: with setsid and no live
+  # intermediate process, PID == PGID, so the saved PID IS the PGID
+  # that `invoke_kill_group` needs. They stay exposed until after
+  # shutdown so a signal trap that aborts the iteration mid-`wait`
+  # (this task's own trap subtasks) can kill the group with
+  # `invoke_kill_group "$invoke_agent_pgid"`.
+  # shellcheck disable=SC2034 # nobody reads the PID yet: the signal
+  # traps of the following subtasks will consume it.
+  invoke_agent_pid="$pid"
+  invoke_agent_pgid="$pid"
+  rc=0
+  wait "$pid" || rc=$?
+  # 126/127 = immediate `die`, no rotation (`motor-decisiones.md`,
+  # "Differentiated exit codes"): decided right here, in the layer
+  # that saw the `wait`'s rc, BEFORE task 06 has anything to
+  # interpret — the spec's order for any decision about the rc is
+  # `wait` → INTERRUPTED flag → interpret. `invoke_interrupted` is
+  # still task 06's concern (without a loop there's no trap to set it
+  # at this point), but its precedence is anchored here: the `|| rc=$?`
+  # guard above is what keeps this code alive under `set -e` until it
+  # can be told apart.
+  invoke_rc_die "$rc"
+  # `.out` is the uniform observation of an iteration. Agents that
+  # write to stdout already land here via the launch redirection;
+  # codex declares `GUBIA_OUTPUT_MODE=file` and writes the result to
+  # the path it received as `console_output`. Normalizing it after the
+  # `wait` leaves the rotation consumer with no branching by origin
+  # and preserves the agent's real rc for its decision.
+  if [[ "$GUBIA_OUTPUT_MODE" == 'file' ]]; then
+    if [[ -f "$invoke_console_output_path" ]]; then
+      cat -- "$invoke_console_output_path" >"$invoke_stdout_path"
+    else
+      # An agent failure can happen before codex materializes its
+      # file. The normalized observation is still an empty `.out` and
+      # the original rc, not an artificial `cat` failure.
+      : >"$invoke_stdout_path"
+    fi
+  fi
+  # Group shutdown when the iteration ends, whatever the rc — normal
+  # finish or agent abort: its subprocesses (MCP, git) must not
+  # outlive it and write to the plan during the next iteration. With
+  # the group already dead this is a no-op; an abort mid-`wait`
+  # (signal to the engine) will invoke this same `invoke_kill_group`
+  # from the trap with the PGID still exposed.
+  invoke_kill_group "$invoke_agent_pgid"
+  # shellcheck disable=SC2034 # the PID is deliberately kept exposed
+  # (diagnostics and symmetry with the PGID); only the PGID has a
+  # consumer.
+  invoke_agent_pid=
+  invoke_agent_pgid=
+  return "$rc"
+}
+
+# Iteration cap for this invocation's loop, set by
+# `run_resolve_max_iterations`. Empty before it's resolved.
+run_max_iterations=
+
+# Resolution of the optional `max_iterations` argument of
+# `gubia run <plan-path> [max_iterations]` (`motor-decisiones.md`,
+# "Command-line interface": "`max_iterations` … defaults to
+# 500").
+#
+# The cap isn't a decorative safeguard: the loop only ends on its own
+# when someone creates the stop file, and that someone is the agent
+# itself. An agent that stops writing it —because the plan was left
+# malformed, or because the model gets stuck answering without touching
+# the disk— would spin the engine indefinitely, burning money. The cap
+# bounds the maximum spend of an invocation without needing human
+# supervision.
+#
+# Absent or empty is the default 500, not an error: the normal way to
+# invoke the engine is `gubia run <plan>` plain.
+#
+# Accepted values: a positive integer and nothing else. `0` is rejected
+# along with everything else instead of being treated as "don't
+# iterate": a `run` that never invokes the agent even once isn't a
+# request anyone actually wants to make, and accepting it silently
+# would turn a typo (or an empty `$var` that slipped through as `0`)
+# into an engine that exits 0 without having done anything —
+# indistinguishable from the outside from a finished plan. Negatives
+# and text don't even get looked at as a number.
+#
+# Exit 2, the "invalid configuration or usage" class (same as
+# `state_validate` and a corrupt catalog), with the full usage in the
+# message: whoever gets this wrong got it wrong typing the command
+# line.
+run_resolve_max_iterations() {
+  local raw="${1:-}"
+  if [[ -z "$raw" ]]; then
+    run_max_iterations=500
+    return 0
+  fi
+  if [[ ! "$raw" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'gubia: run: invalid max_iterations (%s): expected a positive integer (usage: gubia run <path-to-plan> [max_iterations])\n' \
+      "$raw" >&2
+    exit 2
+  fi
+  run_max_iterations="$raw"
+}
+
+# `gubia run <path-to-plan> [max_iterations]` (`motor-decisiones.md`,
+# "Command-line interface"), and by extension the `gubia
+# <path-to-plan>` alias from the same section, both dispatched from
+# `main`.
+#
+# Sets the engine up once and then iterates: `run_resolve_plan`
+# (resolve to absolute + root guard, `die` if the plan escapes),
+# `run_resolve_max_iterations` (loop ceiling), `run_acquire_lock`
+# (`flock` per plan), `run_export_env` (`GUBIA_ROOT`/`GUBIA_PLAN` into
+# the child's environment), `require_tools`, and sourcing the catalog.
+# None of that changes between rounds, so none of it belongs inside
+# the loop: the lock is taken once and held until the process dies,
+# and re-resolving the plan or re-detecting `systemd-run` on every
+# iteration would just repeat work with the same result.
+#
+# The body of each round is the four lines of the iteration contract,
+# in this order: stop file → reread `state.env` → invocation
+# (`run_invoke_iteration`, task 05: `setsid` + the agent's fd 0 +
+# stdout/stderr to separate files under `.gubia/logs/`) → decide
+# whether to rotate or continue (`run_decide_rotation`).
+#
+# The loop has exactly THREE exits, each with its own code, which is
+# what lets it be diagnosed from the outside without reading the log:
+#
+# - Stop file present: exit 0. Either the plan is finished or a judge
+#   deliberately stopped it.
+# - Iteration ceiling exhausted: exit 0 as well
+#   (`motor-decisiones.md`: "Exit 0 is reserved for normal exits
+#   (stop file, max-iterations)"). Not a failure: the engine did
+#   exactly the work it was asked to do and stopped where it was told
+#   to; whoever wants to continue relaunches it.
+# - `fallback-exhausted`: exit 3, from `run_streak_check` inside
+#   `run_decide_rotation`.
+#
+# What is NO LONGER an exit is the agent's exit code: an rc ≠ 0 from
+# an iteration is exactly the use case rotation exists for — the
+# streak gets marked, the model rotates, and iteration continues — so
+# propagating it would kill the loop right when it should keep
+# insisting with another model. Rc 126/127 do kill the process, but
+# before reaching here (`invoke_rc_die`, inside `invoke_agent`), and a
+# signal interruption stops with exit 130 from
+# `run_invoke_iteration`.
+#
+# Model selection happens on every round, after rereading
+# `state.env`: `model_index` is resolved against the active level's
+# fallback list and determines both the catalog function and the
+# model the iteration invokes.
+cmd_run() {
+  local plan="$1"
+  run_resolve_plan "$plan"
+  # Before the lock and any effect: a plan that doesn't exist is a
+  # usage error (or an unrecognized `--help`/`-h`), and dying here
+  # avoids creating `.gubia/` and a lockfile for a run that should
+  # never have iterated.
+  if [[ ! -f "$run_plan_abs" ]]; then
+    printf 'gubia: run: plan does not exist: %s\n' "$run_plan_abs" >&2
+    exit 2
+  fi
+  # Before the lock and any effect: a malformed `max_iterations` is a
+  # usage error, and dying because of it after leaving a fresh
+  # lockfile and a newly created `.gubia/` would be noise from a
+  # command line that never got to iterate.
+  run_resolve_max_iterations "${2:-}"
+  # A missing catalog is broken config, not a usage error: same as
+  # `max_iterations`, dying here before the lock avoids leaving a
+  # lockfile and a `.gubia/` for a run that will never iterate.
+  if [[ ! -f "$GUBIA_AGENTS_SH" ]]; then
+    printf 'gubia: run: agent catalog not found: %s\n' \
+      "$GUBIA_AGENTS_SH" >&2
+    exit 2
+  fi
+  run_acquire_lock
+  run_export_env
+  require_tools
+  invoke_install_traps
+  # shellcheck source=/dev/null # config path resolved at runtime
+  # (`GUBIA_AGENTS_SH`), not literal at lint time.
+  source "$GUBIA_AGENTS_SH"
+  # Explicit mkdir: invoke_agent redirects there, and the lock's
+  # `exec 9>` only created a bare `.gubia/`.
+  mkdir -p -- "${run_root}/.gubia/logs"
+  # Iteration counter (`motor-decisiones.md`, "Command-line
+  # interface"). Starts at 1, not 0, because it isn't just a counter:
+  # it's the prefix of each round's log files
+  # (`.gubia/logs/<iter>.prompt|.out|.err`), and "iteration 1" is how
+  # the first one is named when diagnosing. The condition is `<=`
+  # against that same number, so `max_iterations=N` invokes the agent
+  # exactly N times.
+  #
+  # The counter is local to the process and not persisted in
+  # `state.env`: the ceiling bounds ONE invocation of `gubia run`, not
+  # the plan's lifetime — relaunching the engine after a normal stop
+  # must get its N iterations back, not find the quota already spent
+  # by the previous run.
+  local iter
+  for ((iter = 1; iter <= run_max_iterations; iter++)); do
+    # The stop-file check opens every iteration: after the lock and
+    # setup (the engine already owns this plan and the catalog is
+    # already validated) but before spending a single token — with the
+    # signal present, the agent is never invoked. Inside the loop and
+    # not outside it: the file can appear mid-iteration, right as the
+    # one that just finished (written by the agent from within), or
+    # between two rounds (written by a judge from another process).
+    #
+    # Stopping with exit 0: `motor-decisiones.md` ("Exit 0 is reserved
+    # for normal exits (stop file, max-iterations)") — the stop file
+    # isn't a failure, it's the plan finishing or a judge deliberately
+    # stopping it, and an outside watcher must be able to tell it apart
+    # from an abort without reading the log. The notice goes to
+    # stderr, like everything that isn't the engine's clean stdout,
+    # naming the file: `/gubia run` monitoring diagnoses by reading
+    # that file, not this message.
+    if run_stop_requested; then
+      printf 'gubia: run: stop file present (%s): stopping at iteration %d of %d without invoking the agent\n' \
+        "$run_stop_path" "$iter" "$run_max_iterations" >&2
+      return 0
+    fi
+    # Reread state, already inside the iteration body and before
+    # building the invocation: the values the agent is invoked with
+    # (`effort_level`, `thinking`, and the `model_index` that model
+    # selection will use) must be what the file says NOW, not what
+    # startup read — in between, the agent (`gubia effort set`) and the
+    # engine itself (rotation) may have written to it. This comes after
+    # the stop file: with the signal present the iteration never
+    # happens, and a corrupt `state.env` must not turn a normal stop
+    # (exit 0) into an abort.
+    run_reload_state
+    # Invoke the iteration and capture its exit code, in the order the
+    # spec gives (`wait` → `INTERRUPTED` → decide): encapsulated by
+    # `run_invoke_iteration`, which leaves the rc in
+    # `run_iteration_rc` and stops with exit 130 if the iteration was
+    # interrupted by a signal — without interpreting that rc or
+    # rotating.
+    run_invoke_iteration "$iter"
+    # Decide whether to rotate or continue based on the captured rc
+    # (`run_decide_rotation`): rc 0 closes the streak and continues
+    # with the same model; rc ≠ 0 marks the sentinel, rotates
+    # `model_index` within the active level's list, and aborts with
+    # `fallback-exhausted` (exit 3) if rotation has wrapped back to the
+    # index of the first failure. The index passed in is THIS
+    # iteration's — the one that just failed — read in the reload
+    # above, and the length comes from the already-sourced catalog.
+    # Closes the round: if it doesn't abort, iteration continues.
+    run_decide_rotation "$run_iteration_rc" "$model_index" "$(run_active_len)"
+  done
+  # Ceiling reached without a stop file: normal exit, exit 0. The
+  # ceiling is named and it's stated explicitly that the plan is NOT
+  # finished, because this is the only exit 0 that doesn't mean "no
+  # work left": a watcher tells the two cases apart by the stop file,
+  # which doesn't exist here, and the message says so without having
+  # to go check.
+  printf 'gubia: run: max_iterations reached (%d): stopping without a stop file (the plan may still have work left)\n' \
+    "$run_max_iterations" >&2
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# config_: configuration validation (`gubia config validate`)
+#
+# `motor-decisiones.md`, "Engine capabilities" →
+# "Validate configuration": `source agents.sh` + `declare -F` of what's
+# expected, the 6 valid `state.env` scalars, and the `gubia`/`judge`
+# skills installed in the harness of every model on the active fallback
+# list. The first two live here; the skills one arrives with its own
+# subtask.
+#
+# It's invoked by the `/gubia run` preflight (`gubia-run.md`), and it
+# **doesn't take the `flock`** ("Command-line interface"): it must be
+# able to validate with a loop running against the same plan.
+# ---------------------------------------------------------------------------
+
+# The four agent functions the catalog must define
+# (`motor-decisiones.md`, "Global catalog → `agents.sh`": "one function
+# per agent (codex, claude, omp, devin)"). `agent_probe` isn't
+# included: it's the engine's test agent, not a catalog CLI, and
+# requiring it here would turn a perfectly valid user `agents.sh` into
+# broken config.
+config_agent_functions=(agent_codex agent_claude agent_omp agent_devin)
+
+# Check that the already-sourced catalog defines the four agent
+# functions.
+#
+# `declare -F` and not `type`/`command -v`: the question is "does a
+# FUNCTION with this name exist?", and an `agent_codex` executable on
+# the PATH —or an alias— would pass the check without the catalog
+# defining anything. It's also what the spec names literally.
+#
+# Loops over all four and accumulates the missing ones instead of
+# dying on the first: whoever runs the preflight wants to fix their
+# `agents.sh` in one pass, not discover a missing function one
+# invocation at a time.
+#
+# Returns 1 (not `exit`) so the caller can keep running the rest of
+# the checks and exit once with the full verdict.
+config_validate_agent_functions() {
+  local fn missing=()
+  for fn in "${config_agent_functions[@]}"; do
+    declare -F "$fn" >/dev/null || missing+=("$fn")
+  done
+  if ((${#missing[@]} > 0)); then
+    printf 'gubia: config validate: %s does not define %s (incomplete catalog)\n' \
+      "$GUBIA_AGENTS_SH" "${missing[*]}" >&2
+    return 1
+  fi
+}
+
+# The 6 keys of the closed set of `state.env`
+# (`motor-decisiones.md`, "Local state (`state.env`)"), in the order
+# `state_defaults` writes them, to iterate over them during validation.
+config_scalar_keys=(
+  effort_level
+  fallback_list
+  model_index
+  thinking
+  memory_max
+  loop_max_logs
+)
+
+# Message for an out-of-domain scalar. Same format as `state_die`
+# (file, key, value, expected set) but WITHOUT aborting: `config
+# validate` accumulates and reports in one pass.
+config_scalar_bad() {
+  printf 'gubia: config validate: %s: invalid value for %s: %s (expected: %s)\n' \
+    "$GUBIA_STATE_ENV" "$1" "$2" "$3" >&2
+}
+
+# Check of the 6 valid scalars of `state.env`
+# ("Engine required capabilities" → "Validate configuration"):
+# the 6 keys of the closed set present and with a value within its
+# domain.
+#
+# Rereads the file instead of looking at the variables `state_read`
+# exported when `main` started, for two reasons. One: `state_read`
+# only assigns the keys it finds, so a key MISSING from the file
+# would show up with the value inherited from the process environment
+# (an `effort_level=high` exported in the user's shell would make a
+# `state.env` missing that key pass as valid) — and presence is
+# exactly what needs to be checked: since first creation, a missing
+# key is a corrupt file, never a "default value". And two: never
+# `source`, for the same reason as `state_read` — the file is written
+# by the agent.
+#
+# Loops over the six and accumulates, same as
+# `config_validate_agent_functions`: whoever runs the preflight wants
+# the full list of what needs fixing, not one key per invocation.
+# Returns 1 if something fails, without `exit`.
+#
+# Domains, and why:
+#
+# - `effort_level` (`low|medium|high`) and `thinking` (`true|false`):
+#   the same closed sets as `state_validate`.
+# - `model_index`: integer >= 0. The range against the length of the
+#   active list is NOT checked here: that's the non-aborting guard of
+#   `state_guard_model_index` (a stale index after an interrupted
+#   `effort set` self-corrects by going back to 0), and failing it in
+#   the preflight would punish the user for an engine bug.
+# - `fallback_list`: `default`. The v1 catalog translates a single
+#   set of fallback lists (`[fallback.default.*]` from `agents.toml`
+#   → `GUBIA_FALLBACK_LOW/MEDIUM/HIGH`), so any other name is a set
+#   that doesn't exist and that the engine would silently ignore,
+#   running with `default` anyway.
+# - `memory_max`: whatever `MemoryMax=` from systemd accepts, since
+#   that's who consumes the value (`invoke_prepare`): an integer with
+#   an optional `K|M|G|T` suffix, a percentage, or `infinity`. A
+#   malformed value isn't caught by the engine: `systemd-run` rejects
+#   it at iteration 1, with an rc ≠ 0 that would also rotate the
+#   model.
+# - `loop_max_logs`: integer >= 1. `0` isn't "no rotation" but
+#   "keep zero logs", which would delete even the log of the current
+#   iteration — exactly the evidence used to diagnose the loop.
+config_validate_scalars() {
+  if [[ ! -f "$GUBIA_STATE_ENV" ]]; then
+    printf 'gubia: config validate: local state not found: %s\n' \
+      "$GUBIA_STATE_ENV" >&2
+    return 1
+  fi
+  local -A seen=()
+  local line key
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == *"="* ]] || continue
+    key="${line%%=*}"
+    # Outside the closed set: discarded silently, same as in
+    # `state_read` (junk, typos, comments). A typo doesn't go
+    # unnoticed anyway: the key it meant to write ends up missing and
+    # the presence check catches it.
+    case " ${config_scalar_keys[*]} " in
+      *" $key "*) ;;
+      *) continue ;;
+    esac
+    state_strip_quotes "${line#*=}"
+    seen["$key"]="$state_stripped"
+  done <"$GUBIA_STATE_ENV"
+
+  local rc=0 missing=()
+  for key in "${config_scalar_keys[@]}"; do
+    [[ -v "seen[$key]" ]] || missing+=("$key")
+  done
+  if ((${#missing[@]} > 0)); then
+    printf 'gubia: config validate: %s: missing keys: %s (corrupt file)\n' \
+      "$GUBIA_STATE_ENV" "${missing[*]}" >&2
+    rc=1
+  fi
+
+  # Only the present ones: a missing key has already been reported as
+  # such, and naming it again as "invalid value: " (empty) would be
+  # noise.
+  if [[ -v "seen[effort_level]" ]]; then
+    case "${seen[effort_level]}" in
+      low|medium|high) ;;
+      *) config_scalar_bad effort_level "${seen[effort_level]}" 'low|medium|high'; rc=1 ;;
+    esac
+  fi
+  if [[ -v "seen[fallback_list]" ]]; then
+    case "${seen[fallback_list]}" in
+      default) ;;
+      *) config_scalar_bad fallback_list "${seen[fallback_list]}" 'default'; rc=1 ;;
+    esac
+  fi
+  if [[ -v "seen[model_index]" ]]; then
+    case "${seen[model_index]}" in
+      ''|*[!0-9]*) config_scalar_bad model_index "${seen[model_index]}" 'integer >= 0'; rc=1 ;;
+    esac
+  fi
+  if [[ -v "seen[thinking]" ]]; then
+    case "${seen[thinking]}" in
+      true|false) ;;
+      *) config_scalar_bad thinking "${seen[thinking]}" 'true|false'; rc=1 ;;
+    esac
+  fi
+  # The suffix is trimmed before checking the number (instead of an
+  # extglob pattern): `extglob` is a shell option this script doesn't
+  # enable, and enabling it for one check would change the globbing
+  # of the whole file.
+  local mem num
+  if [[ -v "seen[memory_max]" ]]; then
+    mem="${seen[memory_max]}"
+    num="$mem"
+    case "$num" in
+      *[KMGT%]) num="${num%?}" ;;
+    esac
+    case "$mem" in
+      infinity) ;;
+      *)
+        case "$num" in
+          ''|*[!0-9]*)
+            config_scalar_bad memory_max "$mem" \
+              'integer with optional K|M|G|T suffix, percentage, or infinity'
+            rc=1
+            ;;
+        esac
+        ;;
+    esac
+  fi
+  if [[ -v "seen[loop_max_logs]" ]]; then
+    # `0` ("keep zero logs") is discarded arithmetically and not as a
+    # literal pattern: `00` is the same zero written differently.
+    # `10#` forces base 10 — without it, a `010` would be octal.
+    case "${seen[loop_max_logs]}" in
+      ''|*[!0-9]*) num=0 ;;
+      *) num="$((10#${seen[loop_max_logs]}))" ;;
+    esac
+    if ((num < 1)); then
+      config_scalar_bad loop_max_logs "${seen[loop_max_logs]}" 'integer >= 1'
+      rc=1
+    fi
+  fi
+  return "$rc"
+}
+
+# Skills layout of each harness supported in v1
+# (`instalacion.md`, "Decided": "Four harnesses supported in v1:
+# claude, codex, omp, devin — the same as the catalog. Where each one
+# installs is resolved at implementation time; claude uses
+# `~/.claude/skills/<name>/SKILL.md`"). Claude's is fixed by the spec;
+# the other three were resolved by inspecting each CLI on the machine:
+#
+# - codex: `~/.codex/skills/<name>/SKILL.md` (discovered via the
+#   `--no-skills`/directory the CLI loads).
+# - omp: `~/.omp/agent/skills/<name>/SKILL.md` (the CLI distinguishes
+#   "user-authored skills" in that dir from the "managed" ones in
+#   `~/.omp/agent/managed-skills`; the ones the repo syncs are the
+#   user-authored).
+# - devin: `~/.config/devin/skills/<name>/SKILL.md` (the CLI's XDG
+#   layout, same as `~/.config/devin/` for the rest of its config).
+#
+# They go against `$HOME` and not an absolute path: the sync installs
+# on the user's machine, and the tests point `HOME` at a temp dir to
+# exercise the check without touching the developer's real layout.
+#
+# Resolves the base skills directory of the given agent's harness
+# (without the trailing `<name>/SKILL.md`): it's set in
+# `config_skills_dir` via a global variable, like `state_strip_quotes`,
+# to avoid forking a subshell per model in the list. Returns 0 if the
+# agent has a known layout, 1 if not (a catalog agent that isn't one of
+# the four supported isn't a harness the sync knows how to install
+# into).
+config_harness_skills_dir() {
+  local agent="$1"
+  case "$agent" in
+    claude) config_skills_dir="$HOME/.claude/skills" ;;
+    codex)  config_skills_dir="$HOME/.codex/skills" ;;
+    omp)    config_skills_dir="$HOME/.omp/agent/skills" ;;
+    devin)  config_skills_dir="$HOME/.config/devin/skills" ;;
+    *) return 1 ;;
+  esac
+}
+
+# The two skills the contract assumes are installed in every harness
+# (`instalacion.md`: `gubia` and `judge`). `gubia` is included alongside
+# `judge` because rotation can land on any model in the active list, and
+# an `[effort …]` marker that requires `gubia effort set` on a harness
+# without the `gubia` skill fails just as badly as a `[judge]` marker
+# without `judge`: the agent improvises silently.
+config_required_skills=(gubia judge)
+
+# Checks that the `gubia`/`judge` skills are installed in the harness of
+# every model in the active fallback list (`motor-decisiones.md`,
+# "Engine capabilities" → "Validate configuration";
+# `instalacion.md`, "Decided").
+#
+# Walks the fallback list of the active level (`GUBIA_FALLBACK_*`,
+# already sourced by `cmd_config_validate`), resolves each model's agent
+# from `GUBIA_MODELS`, and verifies that `<layout>/<skill>/SKILL.md`
+# exists for every required skill. This is the piece that turns the
+# contract's availability guarantee into something checkable: without
+# it, a `[judge]` marker that runs on a harness missing the skill still
+# executes and the agent approves without judging — the silent failure
+# mode this checkpoint exists to catch.
+#
+# Sees the catalog arrays via bash dynamic scoping: `cmd_config_validate`
+# sources them in its own scope and this function is called from there,
+# so `GUBIA_MODELS`/`GUBIA_FALLBACK_*` are alive here without this
+# function sourcing them (sourcing them again would duplicate the global
+# config execution point and break `agents.sh`'s boundary).
+#
+# The active level arrives via `effort_level` (exported by `state_read`
+# when `main` starts, already constrained to `low|medium|high` by
+# `state_validate`): the array name is composed from it, just like in
+# `run_active_len`. `fallback_list` doesn't enter the name: in v1 the
+# catalog maps a single set (`default`) to `GUBIA_FALLBACK_<LEVEL>`, so
+# the array is selected by level alone; a `fallback_list` other than
+# `default` is already reported by `config_validate_scalars`.
+#
+# Dedup by agent: several models in the list can share a harness (e.g.
+# `devin-medium` and `devin-high`), and checking the same layout twice
+# is noise. What matters is coverage of every agent rotation can reach,
+# not repeating it per model.
+#
+# Returns 1 (not `exit`) on failure, like the other two checks:
+# `cmd_config_validate` accumulates the full verdict.
+config_validate_skills() {
+  local rc=0
+  local name="GUBIA_FALLBACK_${effort_level^^}"
+  if ! declare -p "$name" >/dev/null 2>&1; then
+    printf 'gubia: config validate: catalog does not define %s (fallback list for the active level)\n' \
+      "$name" >&2
+    return 1
+  fi
+  local -n list="$name"
+  local key entry agent skill
+  local -A seen_agent=()
+  for key in "${list[@]}"; do
+    # Model in the list that isn't in the catalog: fallback list
+    # inconsistent with `GUBIA_MODELS`. Its agent can't be resolved, so
+    # it's reported and the loop continues (the rest of the list may be
+    # fine and whoever fixes this wants to see it all).
+    if [[ -z "${GUBIA_MODELS[$key]+set}" ]]; then
+      printf 'gubia: config validate: model %s in the fallback list not defined in GUBIA_MODELS\n' \
+        "$key" >&2
+      rc=1
+      continue
+    fi
+    entry="${GUBIA_MODELS[$key]}"
+    agent="${entry%% *}"
+    # Agent already seen: its harness was checked with the first model
+    # that brought it. Without this dedup, a list with several
+    # `devin-*` entries would repeat the same two `test -f` per model.
+    [[ -v "seen_agent[$agent]" ]] && continue
+    seen_agent["$agent"]=1
+    if ! config_harness_skills_dir "$agent"; then
+      printf 'gubia: config validate: agent %s has no known skills layout (model %s)\n' \
+        "$agent" "$key" >&2
+      rc=1
+      continue
+    fi
+    for skill in "${config_required_skills[@]}"; do
+      if [[ ! -f "$config_skills_dir/$skill/SKILL.md" ]]; then
+        printf 'gubia: config validate: skill %s not installed in the harness for %s (expected: %s/%s/SKILL.md)\n' \
+          "$skill" "$agent" "$config_skills_dir" "$skill" >&2
+        rc=1
+      fi
+    done
+  done
+  return "$rc"
+}
+
+# `gubia config validate` (`motor-decisiones.md`, "Command-line
+# interface"), dispatched from `main`.
+#
+# The catalog's `source` lives HERE and not inside
+# `config_validate_agent_functions` on purpose: `agents.sh` declares its
+# arrays with `declare`, which inside a function creates **local**
+# variables that die on return — sourcing it in the helper would leave
+# `GUBIA_MODELS`/`GUBIA_FALLBACK_*` out of scope for the check that
+# still needs them (the installed-skills check), which hangs off this
+# same function and does need to walk the active fallback list.
+#
+# Two distinct catalog failures, each with its own message because they
+# get fixed differently: missing catalog (not installed) and catalog
+# that blows up while sourcing (malformed bash). Both prevent the
+# `declare -F` AND the fallback-list walk (no sourced arrays, no list
+# to walk), so those two checks are skipped; the `state.env` scalars
+# don't depend on the catalog and are checked regardless — a preflight
+# that stays silent on half the diagnosis forces a second round trip.
+#
+# The skills check (`config_validate_skills`) hangs off the catalog's
+# `else` branch: it needs the `GUBIA_MODELS`/`GUBIA_FALLBACK_*` arrays
+# that `source` leaves in this scope (bash dynamic scoping), and
+# without the catalog there's no active fallback list to walk. It runs
+# after `config_validate_agent_functions` on purpose: if the catalog
+# doesn't define the four agent functions, `declare -F` has already
+# reported it and asking about skills on top adds noise without new
+# information — the catalog is broken and gets fixed by sourcing it
+# correctly, not by installing skills. It still runs otherwise: a
+# catalog that defines the functions but points to a harness without
+# skills is incomplete configuration that `declare -F` alone can't
+# catch.
+#
+# Exit 2, the "invalid configuration" class used elsewhere in the
+# engine (`state_die`, corrupt catalog in `cmd_run`), and `return`
+# instead of `exit` on the happy path so `main` can close out.
+cmd_config_validate() {
+  local rc=0
+  # The shellcheck directive hangs off the whole `if` and not the
+  # `elif` that sources: it's only valid in front of a complete
+  # compound command (SC1123), never a loose branch. Covers the config
+  # path resolved at runtime (`GUBIA_AGENTS_SH`), which isn't a literal
+  # at lint time.
+  # shellcheck source=/dev/null
+  if [[ ! -f "$GUBIA_AGENTS_SH" ]]; then
+    printf 'gubia: config validate: agent catalog not found: %s\n' \
+      "$GUBIA_AGENTS_SH" >&2
+    rc=2
+  elif ! source "$GUBIA_AGENTS_SH"; then
+    printf 'gubia: config validate: agent catalog cannot be sourced: %s\n' \
+      "$GUBIA_AGENTS_SH" >&2
+    rc=2
+  else
+    config_validate_agent_functions || rc=2
+    config_validate_skills || rc=2
+  fi
+  config_validate_scalars || rc=2
+  return "$rc"
+}
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+cmd_help() {
+  printf 'usage: gubia run <plan-path> [max-iterations]\n'
+  printf '       gubia effort set <low|medium|high>\n'
+  printf '       gubia config validate\n'
+  printf '       gubia -h|--help|help\n'
+}
+
+main() {
+  # Help before touching state: `-h`/`--help`/`help` (and `run -h`/
+  # `run --help`) must not create `state.env` or launch anything.
+  case "${1:-}" in
+    -h|--help|help) cmd_help; return 0 ;;
+  esac
+  if [[ "${1:-}" == "run" ]]; then
+    case "${2:-}" in
+      -h|--help) cmd_help; return 0 ;;
+    esac
+  fi
+  state_ensure
+  state_read
+  state_validate
+  # Mixed dispatch, not purely positional
+  # ("motor-decisiones.md", "Command-line interface"):
+  # `effort set` first (it starts with a verb, not a path), then
+  # `config validate` (same, verb first), and `run` in its two forms:
+  # explicit subcommand (`gubia run <plan>`) and positional alias
+  # (`gubia <plan>`). Order matters: ensure/read/validate first — a
+  # corrupt `state.env` must abort the same way from `effort set` as
+  # from the loop.
+  if [[ "${1:-}" == "effort" && "${2:-}" == "set" ]]; then
+    cmd_effort_set "${3:-}"
+    return 0
+  fi
+  # `|| exit $?` instead of letting the `return` fall through:
+  # `config validate` accumulates the verdict of its checks and
+  # returns it as an exit code, and its caller is a preflight that
+  # decides based on that code. Losing it here would let a broken
+  # config pass as valid.
+  if [[ "${1:-}" == "config" && "${2:-}" == "validate" ]]; then
+    cmd_config_validate || exit $?
+    return 0
+  fi
+  if [[ "${1:-}" == "run" ]]; then
+    if [[ $# -lt 2 ]]; then
+      printf 'gubia: run: missing plan path (usage: gubia run <plan-path> [max-iterations])\n' >&2
+      exit 2
+    fi
+    # The third argument is the optional `max-iterations`; when absent,
+    # `run_resolve_max_iterations` applies the default of 500.
+    cmd_run "$2" "${3:-}"
+    return 0
+  fi
+  # Alias: `gubia <plan-path> [max-iterations]` is
+  # `gubia run <plan-path> [max-iterations]`, optional argument
+  # included — an alias that didn't accept the cap would force
+  # writing the long form exactly when you want to bound the spend.
+  # Only an existing on-disk path as the first argument — never an
+  # unknown subcommand, which dies with the usage message below.
+  if [[ $# -ge 1 ]]; then
+    if [[ -f "$1" ]]; then
+      cmd_run "$1" "${2:-}"
+      return 0
+    fi
+    printf 'gubia: usage: gubia run <plan-path> [max-iterations]\n       gubia effort set <low|medium|high>\n       gubia config validate\n' >&2
+    exit 2
+  fi
+  # No arguments: clean startup. `state_ensure`/`state_read`/
+  # `state_validate` already ran above — that's the contract fixed by
+  # tests/state_env.bats (the engine creates `state.env` on startup,
+  # subcommand or not), consumed by task 10 (e2e) with no noisy output.
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
