@@ -4,7 +4,7 @@ description: "The surface [x] of plan.md or of a task checkbox is not sole evide
 type: pitfall
 ---
 
-Two distinct symptoms of the same underlying problem — the string of
+Several distinct symptoms of the same underlying problem — the string of
 `[x]` checkboxes is not a self-sufficient source of truth:
 
 ## Checkboxes with two different authors
@@ -41,6 +41,21 @@ the plan marked this task as done but subtasks remained unmarked"
 Symptom: the task's entry in `plan/plan.md` is `[x]` while the derived
 file (`plan/plan/NN.md`) still holds `- [ ]` inside: the upward
 propagation and the actual draining of the file did not match up.
+
+## Judge rejection note cleared on re-mark
+
+The judge's rejection annotation on a subtask line ("rejected by judge
+(attempt N)") is cleared when the loop re-marks the subtask `[x]`, so
+the judge's own escalation counter resets to attempt 1 and the rejection
+never escalates. In task 03 the same literal-grep rejection recurred at
+"attempt 1" twice (`.gubia/logs/25.out`, `.gubia/logs/28.out`) because
+re-marking the subtask erased the previous verdict before the judge ran
+again.
+
+Symptom: a `[judge]` rejection repeats with "attempt 1" each time and
+never accumulates; the rejection is invisible in the task file, only in
+the iteration logs. Cross-check `.gubia/logs/*.out` for the judge's
+rejection text, not the task file's annotations.
 
 ## Common rule
 
