@@ -1539,6 +1539,62 @@ run_resolve_max_iterations() {
   run_max_iterations="$raw"
 }
 
+# Prunes `.gubia/logs/` to the `loop_max_logs` most-recent iteration
+# log sets, ordered by modification time of each set's `.prompt`
+# anchor (`plan/log-rotation-prd.md`, R1-R5). An "iteration set" is
+# every file sharing one numeric `<iter>` prefix across `.prompt`,
+# `.out`, `.err`, and `.console`; rotation treats it atomically —
+# deleting every suffix of a pruned set, never a subset (R1).
+#
+# Ordering is by mtime, NOT by numeric prefix: `iter` is local to each
+# `cmd_run` invocation and restarts at 1 on every relaunch
+# (`motor-decisiones.md`), so a `10.prompt` from an earlier run is
+# older than a `1.prompt` from a later one (R2). `<iter>.prompt` is
+# written unconditionally on every iteration (`invoke_prepare`), so it
+# is the reliable mtime anchor for a set.
+#
+# Non-abortive (R6): pruning is maintenance, never an iteration
+# result. Every failure is guarded (`|| continue`, `|| return 0`,
+# `rm -f … || true`) so a broken `rm` or unreadable directory can
+# never abort the loop or feed the model-rotation streak. Only the four
+# known suffixes are ever touched; unrelated files (`.gitkeep`, future
+# engine files) are left alone (R5). Requires a resolved `run_root`
+# and `loop_max_logs` (exported by `state_read`).
+run_prune_logs() {
+  local logs_dir="${run_root}/.gubia/logs"
+  local limit="${loop_max_logs:-20}"
+  local f name prefix mt
+  local -a raw=()
+  local -a sorted
+  local idx line suffix
+
+  [[ -d "$logs_dir" ]] || return 0
+
+  # Enumerate the sets: one `<mtime>\t<prefix>` line per `.prompt`
+  # anchor whose prefix is strictly numeric.
+  for f in "$logs_dir"/*.prompt; do
+    [[ -f "$f" ]] || continue
+    name="${f##*/}"
+    prefix="${name%.prompt}"
+    [[ "$prefix" =~ ^[0-9]+$ ]] || continue
+    mt="$(stat -c %Y -- "$f" 2>/dev/null)" || continue
+    raw+=("${mt}"$'\t'"${prefix}")
+  done
+  (( ${#raw[@]} > limit )) || return 0
+
+  # Most-recently-modified first (`sort -n -r`: descending epoch).
+  mapfile -t sorted < <(printf '%s\n' "${raw[@]}" | sort -rn)
+
+  # Delete every suffix of the sets beyond the `limit` most recent.
+  for ((idx = limit; idx < ${#sorted[@]}; idx++)); do
+    line="${sorted[idx]}"
+    prefix="${line#*$'\t'}"
+    for suffix in prompt out err console; do
+      rm -f -- "$logs_dir/${prefix}.${suffix}" 2>/dev/null || true
+    done
+  done
+}
+
 # `gubia run <path-to-plan> [max_iterations]` (`motor-decisiones.md`,
 # "Command-line interface"), and by extension the `gubia
 # <path-to-plan>` alias from the same section, both dispatched from
