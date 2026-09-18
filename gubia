@@ -1729,6 +1729,14 @@ cmd_run() {
     # interrupted by a signal — without interpreting that rc or
     # rotating.
     run_invoke_iteration "$iter"
+    # Prune `.gubia/logs/` to the `loop_max_logs` most-recent sets,
+    # post-write (R4) so `loop_max_logs=1` keeps exactly the current
+    # set. Non-abortive (R6): maintenance, never an iteration result —
+    # a failure here must not abort the loop, rotate models, or alter
+    # `run_iteration_rc`. `run_prune_logs` already guards its own
+    # failures internally; the `|| true` is belt-and-suspenders so no
+    # unexpected non-zero return can feed the rotation streak.
+    run_prune_logs || true
     # Decide whether to rotate or continue based on the captured rc
     # (`run_decide_rotation`): rc 0 closes the streak and continues
     # with the same model; rc ≠ 0 marks the sentinel, rotates
