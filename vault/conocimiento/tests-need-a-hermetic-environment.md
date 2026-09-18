@@ -1,10 +1,10 @@
 ---
 name: tests-need-a-hermetic-environment
-description: "Two ways to contaminate a test with the developer's real environment (untrimmed PATH, real $HOME) that break assertions or pollute the machine; both require isolating the environment before running, not relying on PATH order."
+description: "Three ways to contaminate a test with the developer's real environment (untrimmed PATH, real $HOME, an ambient GUBIA_AGENTS_SH) that break assertions or pollute the machine; all require isolating the environment before running, not relying on PATH order."
 type: pitfall
 ---
 
-Two incidents of the same underlying problem — a test that assumes
+Three incidents of the same underlying problem — a test that assumes
 isolation from the real environment without enforcing it:
 
 ## Untrimmed fake PATH does not hide real host binaries
@@ -36,6 +36,28 @@ Observable symptom: logs with the text "Restored — ~/.claude/skills/gubia
 and judge are back (re-synced from repo...". Evidence:
 `.ralph/logs/plan/iteration-000350-20260829-211410.log` (startup, the
 restoration), and `git log --oneline -- tests/` up to `648f087`.
+
+## Ambient GUBIA_AGENTS_SH defeats `rm config/agents.sh` + `HOME=`
+
+An engine test that tried to make the agent catalog "absent" by deleting
+`config/agents.sh` and pointing `HOME=` at an empty tempdir still resolved
+the catalog: the `gubia run` loop process had exported `GUBIA_AGENTS_SH`
+into its environment (see `gubia` resolution order at `gubia:47-53`), and
+that ambient variable leaks into the subprocess the test launches, so the
+fallback never reaches the `$HOME/.config/gubia/agents.sh` branch. Deleting
+the local file and neutering `$HOME` cannot make the catalog absent when the
+environment already pins it.
+
+Observable symptom: a pre-existing test (test 45, `gubia_config_validate*`)
+fails only when the suite is run under a live loop process, not under a
+clean shell — the classic "passes in CI, fails on the developer's host"
+signature. Ruled out as a regression by running `env -u GUBIA_AGENTS_SH
+just test` → 0.
+
+Evidence: task 01, `.gubia/logs/10.out` ("ambient `just test` fails test 45
+as PRE-EXISTING/environmental (GUBIA_AGENTS_SH exported by loop process,
+resolved directly at gubia:47-53; rm config/agents.sh + HOME= cannot make
+catalog absent)").
 
 ## Common rule
 
