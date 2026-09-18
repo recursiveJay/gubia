@@ -35,11 +35,12 @@ literal quote); none interprets or summarizes beyond reporting what it found.
 Reads `.gubia/logs/*.out` (and `*.err` when the corresponding `.out` is empty
 or the content indicates failure), from most recent iteration to oldest.
 Filters by relevance by grepping the content for the path of the task file
-being closed — the engine already rotates these files keeping only
-`loop_max_logs`, so there is no need to impose an additional cap: read
-everything there is that is relevant. Reports: what was attempted, what failed
-and why (if there is textual evidence), which pattern recurred across
-iterations.
+being closed. The engine prunes `.gubia/logs/` after each iteration to the
+`loop_max_logs` most-recent iteration log sets, ordered by modification time
+(not by numeric prefix, which collides across relaunches) — so there is no
+need to impose an additional cap: read everything there is that is relevant.
+Reports: what was attempted, what failed and why (if there is textual
+evidence), which pattern recurred across iterations.
 
 ### PLAN
 

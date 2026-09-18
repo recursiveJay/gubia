@@ -77,16 +77,14 @@ task and captures the result, but doesn't write to the plan.
 The historical spec described an integrity detector: a snapshot before
 and after the active task file (state of each checkbox + sha1 of the
 normalized prefix), a check that `[ ]`→`[x]` transitions form a contiguous
-prefix, and a warning on stderr. **That capability isn't implemented in
-the live code**: there's no `integrity_` layer, no snapshot, no transition
+prefix, and a warning on stderr. **That capability is absent from the
+live code**: there's no `integrity_` layer, no snapshot, no transition
 check, no `sha1` computation. The loop trusts the
 `SUBTAREA_COMPLETADA=true` token and the judge to catch improper skips.
 The detector (in warning mode) and abort/revert are left for v1.1/v2 (see
 "Milestones").
 
-Log rotation by mtime isn't implemented either: `loop_max_logs` is
-validated in `config validate` (`gubia:1893`) but no function consumes it
-to purge `.gubia/logs/`. And the engine **doesn't write**
+The engine **doesn't write**
 `.gubia/<slug>.pid` (unlike what the historical spec claimed): the `run`
 process's PID isn't published to disk.
 
@@ -254,6 +252,29 @@ engine blocked waiting on it).
 | `.gubia/state.env` | mutable local state (6 keys) | per repo |
 | `.gubia/logs/` | prompt, stdout and stderr per iteration (`<iter>.{prompt,out,err,console}`) | per repo |
 | `.gubia/<slug>.lock` | `flock` lockfile | per plan |
+
+### Log rotation (`loop_max_logs`)
+
+After each iteration's files are written, the engine prunes
+`.gubia/logs/` to the `loop_max_logs` most-recent iteration log sets
+(`gubia:1563` `run_prune_logs`, called post-write in the loop at
+`gubia:1739` `run_prune_logs || true`). The retention unit is the
+**iteration set** — every file sharing one numeric `<iter>` prefix across
+the `.prompt`, `.out`, `.err`, and `.console` suffixes — and it is treated
+atomically: every suffix of a pruned set is deleted, never a subset (R1).
+Ordering is by **modification time** of each set's `.prompt` anchor, not
+by numeric prefix, because `<iter>` restarts at `1` on every relaunch and
+collides across runs (R2); `.prompt` is written unconditionally every
+iteration (`invoke_prepare`), so it is the reliable mtime anchor. Only the
+four known suffixes are ever touched; unrelated files (`.gitkeep`, future
+engine files) are left alone (R5).
+
+Pruning is **non-abortive** (R6): it is maintenance, never an iteration
+result. Every failure path is guarded (`|| continue`, `|| return 0`,
+`rm -f … || true`), and the call site adds `|| true`, so a failing `rm` or
+an unreadable directory can neither abort the loop nor feed the
+model-rotation streak. Pruning runs after the write so that
+`loop_max_logs=1` keeps exactly the current set (R4).
 
 ## Script structure
 
