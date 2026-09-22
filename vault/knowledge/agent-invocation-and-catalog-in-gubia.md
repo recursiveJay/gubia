@@ -134,3 +134,34 @@ result via contract variables (see the section above):
 
 This is the pattern that tests verifying how the `agents.sh` contract is
 consumed from the rest of the engine must follow.
+
+## Editing the catalog stales hardcoded test sentinels (pitfall)
+
+`tests/agent_probe.bats:63` pins a specific fallback entry as a sentinel: the
+test "sourcing the catalog without scripts/ next to config/ does not abort"
+asserts the `declare -p GUBIA_FALLBACK_MEDIUM` dump contains a literal model
+name (originally `*"codex-medium"*`). When an uncommitted edit to
+`config/agents.sh` removed `codex-medium` from `GUBIA_FALLBACK_MEDIUM`, that
+assertion went stale and the suite reported `140 ok / 1 not ok` — `not ok 8`
+in `tests/agent_probe.bats` — an out-of-scope failure unrelated to whatever
+task was running.
+
+Symptom: the `[judge regression]` gate fails with `not ok 8` at
+`tests/agent_probe.bats:63`, and the failure **recurs across successive
+tasks** (observed spanning tasks 05 and 06): the catalog edit stays
+uncommitted as user WIP, so every later task's full-suite checkpoint re-hits
+the same stale assertion. It is a catalog-edit side effect, not a catalog
+error and not the current task's breakage.
+
+Resolution: point the sentinel at an entry that survives the edit
+(`codex-medium` → `omp-medium`, which remains in `GUBIA_FALLBACK_MEDIUM`),
+then re-run `env -u GUBIA_AGENTS_SH just test` to `141 ok / 0 not ok`. The
+catalog edit itself stays uncommitted as a separate concern — it is never
+swept into the task's logical commit.
+
+Preventive guidance: before editing `config/agents.sh` model lists, grep the
+tests for hardcoded model names (e.g.
+`grep -rn 'codex-medium\|codex-low\|omp-medium' tests/`). A removed entry that
+a test pins surfaces as a confusing out-of-scope red, not as a catalog
+failure. Prefer sentinels that are structural invariants over specific model
+names where the contract permits.
