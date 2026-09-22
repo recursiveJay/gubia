@@ -20,10 +20,13 @@ resumed the first pending `[ ]` subtask without any problem, with no
 `[regression fix]` mark and no manual intervention. Caveat verified
 2026-09-23: the `<iter>` prefixes of `.gubia/logs/` are reused on every
 relaunch (see `log-rotation-retains-by-mtime-not-prefix.md`), so those
-concrete citations no longer resolve to that incident — the `14.out`
-present in the corpus is 1655 bytes of task 01's `[scribe]` output and
-`14.err` holds only `Working...`. Treat any `<iter>` citation as run-scoped:
-re-check the set's mtime and content before relying on it.
+concrete citations no longer resolve to that incident — the `14.out` then in
+the corpus was 1655 bytes of task 01's `[scribe]` output and `14.err` held
+only `Working...`, and both have since been pruned away altogether
+(`loop_max_logs=20`, the retained corpus now starts at `34.*`). Treat any
+`<iter>` citation as run-scoped and short-lived: re-check the set's mtime and
+content before relying on it, and anchor new evidence on the task file, a
+commit hash or a source `gubia:<line>` instead.
 
 Do not create a repair subtask or a regression checkpoint for this
 symptom: it is enough to let the next loop iteration resume the subtask

@@ -165,3 +165,30 @@ tests for hardcoded model names (e.g.
 a test pins surfaces as a confusing out-of-scope red, not as a catalog
 failure. Prefer sentinels that are structural invariants over specific model
 names where the contract permits.
+
+### A local out-of-scope red: fix it at first sight, don't re-declare it not assessable
+
+Because the failure is out of scope, `judge.md` makes it Case B — "not a fail
+for this block" — and the tempting move is to record `[not assessable]` and
+carry on. That closes the individual gate but **defers** the migration's own
+closure criterion (a green suite), so the identical red returns on the next
+task's `[judge regression]`: this happened verbatim in tasks 05 and 06
+(`.gubia/logs/37.out`, `38.out`, `46.out`), and the deferral was flagged at
+the time as blocking the closing task (`.gubia/logs/37.out:19`: "This also
+blocks task 07's closure (suite must be green)" — even though by then a
+one-line sentinel edit sufficed, `.gubia/logs/47.out:3`).
+
+Distinguish the two flavours before choosing:
+
+- the fix lives **outside the repo's tracked state** but is a local, known,
+  one-line reconciliation (a stale sentinel) → fix it now, in its own
+  `[regression fix]` subtask, and let the block proceed green;
+- the cause is genuinely external (a human decision, credentials, an
+  uncommitted user change whose *intent* is unclear) → `[not assessable]` is
+  right, and the blocker is reported on the subtask line.
+
+Choosing "not assessable" for the first flavour costs one full extra
+occurrence of the same failure and leaves the plan's closure gate
+unverifiable; choosing the fix for the second mutates user WIP. The judgement
+is about whether the reconciliation is *known and local*, not about whether
+the file is in the task's Scope.
