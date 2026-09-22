@@ -1,6 +1,6 @@
 ---
 name: write-vault-against-live-code
-description: "When creating or migrating vault/ documentation that describes live code, write against the source citing exact paths+lines and verify with grep that no references to destilado/ or referencia/ remain; when the doc is a reference layer (summary, not a copy), the [judge]'s acceptance criterion compares length/size against the source, not just an eyeballed content review; and when executing a task that cites file:line references to update, re-grep each one before editing — the inventory is a claim about the repo, not a fact."
+description: "When creating or migrating vault/ documentation that describes live code, write against the source citing exact paths+lines and verify with grep that no references to destilado/ or referencia/ remain; when the doc is a reference layer (summary, not a copy), the [judge]'s acceptance criterion compares length/size against the source, not just an eyeballed content review; and when executing a task that cites file:line references to update, re-grep each one before editing — the inventory is a claim about the repo, not a fact; and, when executing a rename task of a migration plan, prefer an anchored-regex criterion over extra path exclusions when the surviving leftover is a hyphenated variant of the old name, and stage for the commit only the files the task touched, leaving unrelated working-tree drift unstaged."
 type: methodology
 ---
 
@@ -131,3 +131,51 @@ skills/judge/judge.md` returned exit 1, while the only live judge-side
 reference was the condensed mirror `vault/skills/judge/judge.md:41`. The
 subtask was rewritten as an explicit no-op instead of fabricating an edit
 (`.gubia/logs/9.out:7`).
+
+## An anchored-regex criterion replaces path exclusions for hyphenated historical names
+
+When the acceptance criterion of a `[judge]` is "no live reference to `X.md`
+remains", the repo usually also carries *historical* names that merely begin
+with the old stem (`motor-decisiones.md`, `motor-contrato.md`,
+`catalogo-agentes.md`: trees that no longer exist on disk and whose mentions
+must survive). A plain-substring grep (`conocimiento`, `motor`) matches those
+too, so the criterion has to grow `:(exclude)` paths to stay green, whereas a
+criterion anchored to the full filename as a regex (`motor\.md`,
+`catalogo\.md`) cannot match a hyphenated sibling at all.
+
+Prefer the anchored regex when what must survive is a hyphenated variant of
+the old name: it keeps the evidence command short and makes the exclusion
+reason unnecessary. Keep the path exclusions for leftovers that genuinely
+contain the exact filename, because the regex cannot separate those.
+
+Evidence: task 01's criterion was the plain substring `git grep -n
+conocimiento` with three exclusions (`plan/task/01.md:41-44`); task 02's was
+`git grep -nE 'motor\.md'` over the same three exclusions and no more, with
+the reason stated literally in the task file (`plan/task/02.md:39`: "The
+historical `motor-decisiones.md`/`motor-contrato.md` names do not match
+`motor\.md`"), verified empty in `.gubia/logs/18.out:1`. Conversely, task 04
+expects exactly one leftover because `destilado/instalacion.md` is cited from
+a live note and does match `instalacion\.md`: there the regex buys nothing
+and the leftover is handled as the "destination documentation" case above.
+
+## The `[commit]` subtask commits what earlier iterations already staged
+
+The phase-0 scaffold splits each rename into separate subtasks: the rename
+plus its reference edits in one iteration, the `[judge]` checkpoint on the
+staged tree in the next, and a `[commit]` subtask after it. Two consequences
+repeat identically in every rename task of such a migration plan:
+
+- The commit subtask finds the working tree already edited and staged; it
+does not produce the edits. Do not re-apply or re-verify them there: stage
+the rename's files as they stand (`plan/task/02.md:41`, evidence
+`.gubia/logs/18.out:3` "staged", then `.gubia/logs/19.out:3` "were already
+staged/edited from previous iterations").
+- The working tree can carry drift unrelated to the migration, belonging to
+the user (here a modified `config/agents.sh` model map). Stage explicitly the
+files the task touched; never `git add -A` or `git commit -a`, which would
+fold that drift into the rename's logical commit. Report it as deliberately
+left unstaged.
+
+Evidence: `plan/task/01.md:45` and `plan/task/02.md:41` state it on the
+subtask line; `.gubia/logs/13.out:1` and `.gubia/logs/19.out:4` show both
+rename commits of this phase leaving `config/agents.sh` out.
