@@ -1,16 +1,19 @@
-# `.gubia/` es estado local del motor, por repo y por proceso: no se
-# versiona salvo la nota y el `.gitkeep` de `logs/` (ver .gubia/README.md).
-# En particular `agent-probe.dump` es un volcado del entorno real de la
-# máquina — se regenera en cada `gubia run` y no tiene sitio en la historia.
+# `.gubia/` is local engine state, per repo and per process: it is not
+# versioned except for the README and `logs/`'s `.gitkeep` (see .gubia/README.md).
+# In particular `agent-probe.dump` is a dump of the real machine
+# environment — it is regenerated on every `gubia run` and has no place
+# in history.
 .gubia/*
 !.gubia/README.md
 !.gubia/logs/
 .gubia/logs/*
 !.gubia/logs/.gitkeep
 
-# Testigo de iteraciones de las pruebas e2e del fixture repo-minimo
-# (tarea 10): se regenera en cada ejecución del CLI falso y no tiene
-# sitio en la historia.
+# Iteration witness for the repo-minimo fixture's e2e tests (task 10):
+# regenerated on every run of the fake CLI and has no place in history.
 .fixture-log/
 
 plan/
+
+# Local Obsidian config for vault/.
+vault/.obsidian/
