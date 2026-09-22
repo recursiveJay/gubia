@@ -55,7 +55,7 @@ fi
 # The 6 keys of the closed set with their default values, as fixed
 # by `vault/spec/engine.md` ("Local state (`state.env`)",
 # values taken from the original `state.toml` — see
-# `vault/spec/catalogo.md`).
+# `vault/spec/catalog.md`).
 state_defaults() {
   printf '%s\n' \
     'effort_level=medium' \
