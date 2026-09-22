@@ -1,15 +1,15 @@
 ---
 name: minimal-fixture-repo-and-engine-test-patterns
-description: "tests/fixtures/repo-minimo/ is the versioned fixture for gubia engine e2e tests (minimal plan + scripted fake CLI), with its usage pattern and the additional pattern for testing signal escalation on process-group shutdown."
+description: "tests/fixtures/repo-minimal/ is the versioned fixture for gubia engine e2e tests (minimal plan + scripted fake CLI), with its usage pattern and the additional pattern for testing signal escalation on process-group shutdown."
 type: methodology
 ---
 
 # Minimal fixture repo and engine test patterns
 
-## The versioned fixture `tests/fixtures/repo-minimo/`
+## The versioned fixture `tests/fixtures/repo-minimal/`
 
 For e2e tests of the `gubia` engine there is the versioned fixture
-`tests/fixtures/repo-minimo/`: a minimal 3-subtask plan + a scripted fake
+`tests/fixtures/repo-minimal/`: a minimal 3-subtask plan + a scripted fake
 CLI `fake-cli.sh` + its own `config/agents.sh`. Consolidated pattern:
 
 1. Copy the fixture to a tempdir with `cp -a` before running, and record
@@ -33,11 +33,11 @@ CLI `fake-cli.sh` + its own `config/agents.sh`. Consolidated pattern:
    (`iteration-000374-20260829-222433.log:26-27`).
 
 Never run tests against the repo's own `plan/plan.md`, which is being
-drained by the loop in progress (`tests/fixtures/repo-minimo/README.md:7-11`).
+drained by the loop in progress (`tests/fixtures/repo-minimal/README.md:7-11`).
 
 ### Fake CLI design: it does not interpret the prompt, it maps by file
 
-The fixture's fake CLI (`tests/fixtures/repo-minimo/fake-cli.sh`) does NOT
+The fixture's fake CLI (`tests/fixtures/repo-minimal/fake-cli.sh`) does NOT
 interpret the content of the received prompt: it drains by reading the plan
 from `GUBIA_PLAN` (relative to `GUBIA_ROOT`), both exported by the engine
 into the iteration environment, just as a real agent navigating the repo

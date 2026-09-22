@@ -21,7 +21,7 @@
 # copy, and the committed fixture stays intact.
 
 GUBIA_BIN="${BATS_TEST_DIRNAME}/../gubia"
-FIXTURE_DIR="${BATS_TEST_DIRNAME}/fixtures/repo-minimo"
+FIXTURE_DIR="${BATS_TEST_DIRNAME}/fixtures/repo-minimal"
 
 setup() {
   repo="$(mktemp -d)"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# E2e test of the post-iteration log rotation over the `repo-minimo`
+# E2e test of the post-iteration log rotation over the `repo-minimal`
 # fixture (plan/task/02.md): after a drained run with
 # `loop_max_logs=K` (K < N), `.gubia/logs/` holds files for at most K
 # iterations, and the retained sets are the K most recent (R2/R3).
@@ -11,7 +11,7 @@
 # small `loop_max_logs` so the pruner has something to delete.
 
 GUBIA_BIN="${BATS_TEST_DIRNAME}/../gubia"
-FIXTURE_DIR="${BATS_TEST_DIRNAME}/fixtures/repo-minimo"
+FIXTURE_DIR="${BATS_TEST_DIRNAME}/fixtures/repo-minimal"
 
 setup() {
   repo="$(mktemp -d)"

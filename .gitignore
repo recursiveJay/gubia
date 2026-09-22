@@ -9,7 +9,7 @@
 .gubia/logs/*
 !.gubia/logs/.gitkeep
 
-# Iteration witness for the repo-minimo fixture's e2e tests (task 10):
+# Iteration witness for the repo-minimal fixture's e2e tests (task 10):
 # regenerated on every run of the fake CLI and has no place in history.
 .fixture-log/
 

@@ -8,7 +8,7 @@
 # Difference from `gubia_config_validate.bats`: that one composes the
 # temporary repo by hand (`mktemp -d` + catalog written by the test,
 # sibling of the task 04-06 suites); this one exercises the real fixture
-# committed in `tests/fixtures/repo-minimo` — its `config/agents.sh` with
+# committed in `tests/fixtures/repo-minimal` — its `config/agents.sh` with
 # the arrays and the fixture's `agent_probe`, not a catalog invented
 # here. The copy to a temporary directory (`cp -a`, not the other tests)
 # isolates the fixture: `state_ensure` writes its `.gubia/state.env` in
@@ -21,7 +21,7 @@
 # installed — without touching the machine's real skills.
 
 GUBIA_BIN="${BATS_TEST_DIRNAME}/../gubia"
-FIXTURE_DIR="${BATS_TEST_DIRNAME}/fixtures/repo-minimo"
+FIXTURE_DIR="${BATS_TEST_DIRNAME}/fixtures/repo-minimal"
 
 setup() {
   repo="$(mktemp -d)"
@@ -64,7 +64,7 @@ install_all() {
   done
 }
 
-@test "config validate over the repo-minimo fixture exits 0 (preflight green)" {
+@test "config validate over the repo-minimal fixture exits 0 (preflight green)" {
   install_all
   GUBIA_AGENTS_SH="$repo/config/agents.sh" HOME="$home" \
     run "$GUBIA_BIN" config validate
