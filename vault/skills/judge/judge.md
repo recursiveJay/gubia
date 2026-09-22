@@ -38,7 +38,7 @@ entirely `[x]`. Judges a single block per invocation.
   subcommand never actually invoked the agent), documented literally in
   each rejection (`plan/plan/04.md:50-52`, `:54`).
 - If the file count of a directory shared across tasks (e.g.
-  `vault/conocimiento/`) doesn't match what the original migration task
+  `vault/knowledge/`) doesn't match what the original migration task
   expected, don't reject on that alone: check whether a later `scribe`
   documented a legitimate consolidation (explicit pruning/relocation)
   before ruling — see also the warning about fragile count criteria in

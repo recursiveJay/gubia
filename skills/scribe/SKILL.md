@@ -1,6 +1,6 @@
 ---
 name: scribe
-description: "Distills the accumulated learning of a completed task into reusable knowledge (vault/conocimiento/ or a single skill), and prunes that knowledge when it grows too large [scribe]."
+description: "Distills the accumulated learning of a completed task into reusable knowledge (vault/knowledge/ or a single skill), and prunes that knowledge when it grows too large [scribe]."
 ---
 
 # scribe
@@ -33,7 +33,7 @@ path or assumes a specific directory (same contract as `judge`).
 
 No action of this skill assumes where the project's knowledge lives:
 `review.md` decides it in its Step 0, repeating the check on every
-invocation (`test -d vault/` → `vault/conocimiento/`; otherwise the single
+invocation (`test -d vault/` → `vault/knowledge/`; otherwise the single
 skill `skills/<repo-root-directory-name>/SKILL.md`, creating it if it does
 not exist).
 

@@ -18,7 +18,7 @@ the synthesis (deduplicate, classify, create/extend/delete) is done by
 Repeated on every invocation, never assumed from a previous pass:
 
 1. `test -d vault/` at the workspace root.
-2. If it exists → destination is `vault/conocimiento/` (one entry = one file).
+2. If it exists → destination is `vault/knowledge/` (one entry = one file).
 3. If it does not exist → destination is the single skill,
    `skills/<root-repo-directory-name>/SKILL.md` (one entry = one `##` section
    in that single file). If the file does not exist yet, it is created with
@@ -53,7 +53,7 @@ task file itself (context sections, reopening notes).
 
 ### INVENTORY
 
-Reads the already-existing knowledge: `vault/conocimiento/` or the single
+Reads the already-existing knowledge: `vault/knowledge/` or the single
 skill (according to what Step 0 decides), plus any loose local skill in the
 repository (skills under `skills/` that are not the engine itself — `gubia`,
 `judge`, `scribe`). Reports the current inventory: which entries exist, of
@@ -105,7 +105,7 @@ extension or deletion on the destination file:
 ## Chaining to `consolidate`
 
 After Step 3, if the destination decided in Step 0 is `vault/` **and** the
-file count in `vault/conocimiento/` ends up **>10** after applying the
+file count in `vault/knowledge/` ends up **>10** after applying the
 changes of this pass, `consolidate.md` is loaded next, **in the same
 invocation** — no new marker is queued and no other iteration is awaited. If
 the destination is the single skill, this check is skipped entirely: there is
@@ -113,7 +113,7 @@ no threshold equivalent in single-skill mode.
 
 ## Format of an entry
 
-### `vault/` mode (`vault/conocimiento/<kebab-case-name>.md`)
+### `vault/` mode (`vault/knowledge/<kebab-case-name>.md`)
 
 ```markdown
 ---

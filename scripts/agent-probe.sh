@@ -29,7 +29,7 @@
 #   <full prompt received on stdin>
 #
 # Matches the `agent_probe` contract documented in
-# `vault/conocimiento/agent-invocation-and-catalog-in-gubia.md`:
+# `vault/knowledge/agent-invocation-and-catalog-in-gubia.md`:
 # starts at the repo root (`scripts/` of the repo), reads the prompt on
 # stdin with `cat`, and writes with `printf '%s\n'` (never `echo`,
 # which isn't portable with flags like `-n`/`-e`).

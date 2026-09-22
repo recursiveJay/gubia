@@ -1,6 +1,6 @@
 # scribe / consolidate
 
-"Consolidate" action: when `vault/conocimiento/` exceeds 10 entries, brings
+"Consolidate" action: when `vault/knowledge/` exceeds 10 entries, brings
 it back down to ≤10 by merging, pruning, or relocating — without losing
 irreplaceable evidence just to shorten the list. Only applies in `vault/`
 mode; single-skill mode has no equivalent threshold and this action never

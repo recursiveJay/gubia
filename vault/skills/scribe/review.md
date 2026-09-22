@@ -15,13 +15,13 @@ Pending `[scribe]` subtask, last one in the task file with everything else
 ## Key rules
 
 - Decides the destination on each invocation (never assumes it):
-  `vault/conocimiento/` (one entry = one file) if `vault/` exists, otherwise
+  `vault/knowledge/` (one entry = one file) if `vault/` exists, otherwise
   the single skill `skills/<repo>/SKILL.md` (one entry = one section).
 - Each surviving finding is classified as create / extend / delete, always
   checked against the existing inventory to avoid duplicating.
 - Builders run in parallel only in `vault/` mode; in sequence in single-skill
   mode (same file, risk of collision).
-- If after applying changes `vault/conocimiento/` has >10 files, chains into
+- If after applying changes `vault/knowledge/` has >10 files, chains into
   `consolidate.md` in the same invocation.
 - Doesn't implement product code or fix task files; only distills. Doesn't
   touch `destilado/`.
