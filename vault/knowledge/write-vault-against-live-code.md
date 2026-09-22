@@ -1,6 +1,6 @@
 ---
 name: write-vault-against-live-code
-description: "When creating or migrating vault/ documentation that describes live code, write against the source citing exact paths+lines and verify with grep that no references to destilado/ or referencia/ remain; when the doc is a reference layer (summary, not a copy), the [judge]'s acceptance criterion compares length/size against the source, not just an eyeballed content review; and when executing a task that cites file:line references to update, re-grep each one before editing — the inventory is a claim about the repo, not a fact; and, when executing a rename task of a migration plan, prefer an anchored-regex criterion over extra path exclusions when the surviving leftover is a hyphenated variant of the old name, and stage for the commit only the files the task touched, leaving unrelated working-tree drift unstaged."
+description: "When creating or migrating vault/ documentation that describes live code, write against the source citing exact paths+lines and verify with grep that no references to destilado/ or referencia/ remain; when the doc is a reference layer (summary, not a copy), the [judge]'s acceptance criterion compares length/size against the source, not just an eyeballed content review; and when executing a task that cites file:line references to update, re-grep each one before editing — the inventory is a claim about the repo, not a fact; and, when executing a rename task of a migration plan, prefer an anchored-regex criterion over extra path exclusions when the surviving leftover is a hyphenated variant of the old name, and stage for the commit only the files the task touched, leaving unrelated working-tree drift unstaged; and a [judge] criterion pinning an exact count of expected matches is a plan-time claim too — refine it at execution time when a later commit legitimately added a match, never force the repo to the stale number."
 type: methodology
 ---
 
@@ -154,9 +154,41 @@ conocimiento` with three exclusions (`plan/task/01.md:41-44`); task 02's was
 the reason stated literally in the task file (`plan/task/02.md:39`: "The
 historical `motor-decisiones.md`/`motor-contrato.md` names do not match
 `motor\.md`"), verified empty in `.gubia/logs/18.out:1`. Conversely, task 04
-expects exactly one leftover because `destilado/instalacion.md` is cited from
-a live note and does match `instalacion\.md`: there the regex buys nothing
-and the leftover is handled as the "destination documentation" case above.
+carried leftovers that do match `instalacion\.md` (cited from a live note);
+there the regex buys nothing and each leftover is handled either as the
+"destination documentation" case above or as a stale expected count, below.
+
+## A pinned expected count goes stale like a reference inventory
+
+A judge criterion written at plan time that pins an **exact count** of
+expected matches ("returns exactly one line") is a claim about the repo at
+drafting time, and later commits — including this migration's own scribe
+distillations — can legitimately add a match. The executor then has a choice:
+force the repo to match a stale number, or refine the number in the task file
+at execution time and record why the criterion changed. Choose the second:
+refine the criterion *before* the `[judge]` runs, stating the source of the
+new match in the same line, so the judge verifies against the corrected
+number and the edit stays auditable.
+
+Symptom of the opposite (the plan number being treated as a work order): a
+subtask edited backwards — removing a legitimate surviving match, or an
+intentional one — just to reach the pinned count.
+
+Evidence: `plan/task/04.md:35` was written as "returns exactly 1 line"; by
+execution time the corpus carried 2 intentional `destilado/instalacion.md`
+citations, the second (`vault/knowledge/write-vault-against-live-code.md:157`)
+having been added by task 02's own scribe commit `c2fed40`, which cites this
+very criterion. The refinement was done in the rename iteration
+(`.gubia/logs/28.out:6`: "I refined the `[judge]` criterion in
+`plan/task/04.md` accordingly (it claimed \"exactly 1 line\", stale since
+`c2fed40`)") and the judge then verified the refined 2-line criterion
+literally (`.gubia/logs/29.out:8`: "Exactly 2 lines, both intentional
+historical `destilado/instalacion.md` citations — matches the refined
+acceptance criterion literally").
+
+Same lesson as "A plan's reference inventory is a claim about the repo, not a
+fact", from the criterion side: both are plan-time claims to re-derive before
+acting, not to satisfy by force.
 
 ## The `[commit]` subtask commits what earlier iterations already staged
 
