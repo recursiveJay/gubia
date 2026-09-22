@@ -1,6 +1,6 @@
 ---
 name: write-vault-against-live-code
-description: When creating or migrating vault/ documentation that describes live code, write against the source citing exact paths+lines and verify with grep that no references to destilado/ or referencia/ remain; when the doc is a reference layer (summary, not a copy), the [judge]'s acceptance criterion compares length/size against the source, not just an eyeballed content review.
+description: "When creating or migrating vault/ documentation that describes live code, write against the source citing exact paths+lines and verify with grep that no references to destilado/ or referencia/ remain; when the doc is a reference layer (summary, not a copy), the [judge]'s acceptance criterion compares length/size against the source, not just an eyeballed content review; and when executing a task that cites file:line references to update, re-grep each one before editing — the inventory is a claim about the repo, not a fact."
 type: methodology
 ---
 
@@ -109,3 +109,25 @@ When writing a grep-based judge criterion, scope it to the section or line
 range actually being changed (e.g. `vault/spec/motor.md:256-277`), never the
 whole file — the same scoping lesson as the exclusion case above, from the
 opposite side.
+
+## A plan's reference inventory is a claim about the repo, not a fact
+
+When a task hands over an explicit list of `file:line` references to update (a
+rename or migration inventory), that list was grep-verified when the plan was
+drafted; by the time the task is executed it can be stale. Re-grep every
+cited reference **before** editing it, and treat the plan's inventory as a
+hypothesis to confirm, not as a work order whose target is guaranteed to exist
+in the form described.
+
+A reference-update subtask whose target turns out not to carry the string is a
+legitimate **no-op**: record the verified absence on the subtask line (command
+plus its exit code) and move to the next one. Never invent the missing
+reference, and never edit a file that does not carry the string, just to make
+the subtask look fulfilled.
+
+Evidence: `plan/task/01.md:12` — the plan asserted that
+`skills/judge/judge.md:41` carried `vault/conocimiento/`; `grep -n conocimiento
+skills/judge/judge.md` returned exit 1, while the only live judge-side
+reference was the condensed mirror `vault/skills/judge/judge.md:41`. The
+subtask was rewritten as an explicit no-op instead of fabricating an edit
+(`.gubia/logs/9.out:7`).
