@@ -18,7 +18,7 @@ code in at least five dimensions, verified while writing `vault/spec/` (task
 
 Copying `destilado/` literally would have propagated those errors into
 `vault/`. The following procedure was applied successfully to the four
-`vault/spec/` files (`motor.md`, `catalogo.md`, `instalacion.md`, `README.md`)
+`vault/spec/` files (`engine.md`, `catalogo.md`, `instalacion.md`, `README.md`)
 and is reusable for any new `vault/` content:
 
 1. Read the live source cited in the task (`gubia`, `config/agents.sh`,
@@ -97,16 +97,16 @@ closing scope is broader.
 The same grep-as-judge-criterion pattern fails the other way too: a bare
 `grep <phrase> <file>` over an entire file matches **unrelated** occurrences
 of the phrase, rejecting work the change never touched. In task 03 the
-criterion "`grep -n "isn't implemented" vault/spec/motor.md` returns
+criterion "`grep -n "isn't implemented" vault/spec/engine.md` returns
 nothing" (meant to confirm the log-rotation gap note was gone) also matched
-an integrity-detector note at `vault/spec/motor.md:80` ("That capability
+an integrity-detector note at `vault/spec/engine.md:80` ("That capability
 isn't implemented in the live code"), forcing a spurious reword of unrelated
 prose to "absent from the live code" (`plan/task/03.md:42`). The judge verdict
 then oscillated PASS/FAIL across adjacent iterations as the loop re-marked the
 subtask.
 
 When writing a grep-based judge criterion, scope it to the section or line
-range actually being changed (e.g. `vault/spec/motor.md:256-277`), never the
+range actually being changed (e.g. `vault/spec/engine.md:256-277`), never the
 whole file — the same scoping lesson as the exclusion case above, from the
 opposite side.
 

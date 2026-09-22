@@ -12,7 +12,7 @@
 # test directly the detection embedded in `state_read`: the engine
 # calls `state_read` at the start of each iteration, so that is the
 # point where a level change must clear the streak
-# (vault/spec/motor.md, "Consistency when changing effort level": the
+# (vault/spec/engine.md, "Consistency when changing effort level": the
 # agent wrote the level from another process via `gubia effort set`;
 # the engine only sees it on re-read).
 

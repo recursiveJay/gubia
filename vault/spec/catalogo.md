@@ -226,7 +226,7 @@ exiting with exit 2:
    requiring it would turn a perfectly valid user `agents.sh` into a
    broken config.
 2. **`state.env` scalars**: the 6 keys present and in-domain (see
-   `motor.md`).
+   `engine.md`).
 3. **Installed skills** (`config_validate_skills`, `gubia:1989`): walks
    the active level's fallback list, dedups by agent, and checks that
    each agent has its known skills layout

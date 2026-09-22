@@ -5,7 +5,7 @@
 # `motor-contrato.md` followed by the full content of the plan file,
 # with no truncation or concatenation of task files").
 #
-# The observable contract (`vault/spec/motor.md`, "Composition:
+# The observable contract (`vault/spec/engine.md`, "Composition:
 # fixed header + `cat <plan>`. Nothing else"):
 #
 # - The prompt is exactly header + plan content, in that order, with

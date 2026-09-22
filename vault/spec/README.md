@@ -9,7 +9,7 @@ folder is the project spec, written against the live code of the repo.
 
 | File | What it documents | Source of truth |
 |---|---|---|
-| [motor.md](motor.md) | engine decisions and contract: CLI, local state, rotation, process management, script structure | `gubia` (executable, 2172 lines) |
+| [engine.md](engine.md) | engine decisions and contract: CLI, local state, rotation, process management, script structure | `gubia` (executable, 2172 lines) |
 | [catalogo.md](catalogo.md) | global agent catalog: models, fallback lists, contract of the `agent_*` functions, `agent_probe` | `config/agents.sh` |
 | [instalacion.md](instalacion.md) | installation and sync: projecting skills to harnesses, `install-config`, `config validate` | `justfile` |
 

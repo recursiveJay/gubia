@@ -32,7 +32,7 @@ loop_max_logs
 EOF
 
   # Full content against the defaults documented in
-  # vault/spec/motor.md (those of the original state.toml).
+  # vault/spec/engine.md (those of the original state.toml).
   diff - .gubia/state.env <<'EOF'
 effort_level=medium
 fallback_list=default

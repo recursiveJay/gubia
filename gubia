@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gubia — loop engine that drains markdown task plans.
 #
-# Monolithic script per `vault/spec/motor.md` ("Script
+# Monolithic script per `vault/spec/engine.md` ("Script
 # structure"): a per-layer prefix as the module system (`state_`,
 # `agents_`, `integrity_`, `run_`, `invoke_`) and `main` under a guard
 # so tests can source it without executing it.
@@ -53,7 +53,7 @@ if [[ -z "${GUBIA_AGENTS_SH:-}" ]]; then
 fi
 
 # The 6 keys of the closed set with their default values, as fixed
-# by `vault/spec/motor.md` ("Local state (`state.env`)",
+# by `vault/spec/engine.md` ("Local state (`state.env`)",
 # values taken from the original `state.toml` — see
 # `vault/spec/catalogo.md`).
 state_defaults() {

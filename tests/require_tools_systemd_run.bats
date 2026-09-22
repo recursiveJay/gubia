@@ -6,7 +6,7 @@
 # `require_tools` emits a single warning on stderr when it is missing,
 # allowing execution without a memory limit").
 #
-# The observable contract (vault/spec/motor.md, "Memory limit" +
+# The observable contract (vault/spec/engine.md, "Memory limit" +
 # gotcha "detect once in a `require_tools` before the loop"):
 #
 # - `systemd-run` ABSENT from the `PATH` is not abortive: `require_tools`
