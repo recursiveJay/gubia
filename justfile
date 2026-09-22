@@ -56,7 +56,7 @@ sync-skills:
     done
 
 # Installs on the machine what `gubia config validate` requires before
-# `gubia run` can start (see `vault/spec/instalacion.md`): the `gubia`
+# `gubia run` can start (see `vault/spec/installation.md`): the `gubia`
 # binary on the user's PATH and the global `agents.sh` catalog at
 # `~/.config/gubia/`. Human/engine config, never an iteration's: only the
 # human runs this, same as sync-skills, and it overwrites whatever is

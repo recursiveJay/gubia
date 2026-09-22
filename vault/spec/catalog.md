@@ -233,7 +233,7 @@ exiting with exit 2:
    (`config_harness_skills_dir`, `gubia:1935`) with the **`gubia` and
    `judge`** skills installed (`config_required_skills=(gubia judge)`,
    `gubia:1952`). That's **two** skills required by the loop, not
-   three: `scribe` is synced (see `instalacion.md`) but isn't a
+   three: `scribe` is synced (see `installation.md`) but isn't a
    requirement for `run`.
 
 Per-harness skills layouts:

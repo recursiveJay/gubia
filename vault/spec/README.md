@@ -11,7 +11,7 @@ folder is the project spec, written against the live code of the repo.
 |---|---|---|
 | [engine.md](engine.md) | engine decisions and contract: CLI, local state, rotation, process management, script structure | `gubia` (executable, 2172 lines) |
 | [catalog.md](catalog.md) | global agent catalog: models, fallback lists, contract of the `agent_*` functions, `agent_probe` | `config/agents.sh` |
-| [instalacion.md](instalacion.md) | installation and sync: projecting skills to harnesses, `install-config`, `config validate` | `justfile` |
+| [installation.md](installation.md) | installation and sync: projecting skills to harnesses, `install-config`, `config validate` | `justfile` |
 
 These three files replace the historical v1 spec (stale: ~550 lines,
 nonexistent layers, outdated counts). Every fact is anchored to the
@@ -32,7 +32,7 @@ this section's purpose:
   iteration (drafting the plan, launching the engine, watching it). The
   engine doesn't read it; the agent running the iteration reads it, and
   only because the injected contract names it. `just sync-skills`
-  projects it to each harness's layout (see `instalacion.md`).
+  projects it to each harness's layout (see `installation.md`).
 
 The binary drains the plan; the skill tells the agent how to
 participate in the draining. They share no code: one is

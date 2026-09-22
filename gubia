@@ -1973,7 +1973,7 @@ config_validate_scalars() {
 }
 
 # Skills layout of each harness supported in v1
-# (`instalacion.md`, "Decided": "Four harnesses supported in v1:
+# (`installation.md`, "Decided": "Four harnesses supported in v1:
 # claude, codex, omp, devin — the same as the catalog. Where each one
 # installs is resolved at implementation time; claude uses
 # `~/.claude/skills/<name>/SKILL.md`"). Claude's is fixed by the spec;
@@ -2011,7 +2011,7 @@ config_harness_skills_dir() {
 }
 
 # The two skills the contract assumes are installed in every harness
-# (`instalacion.md`: `gubia` and `judge`). `gubia` is included alongside
+# (`installation.md`: `gubia` and `judge`). `gubia` is included alongside
 # `judge` because rotation can land on any model in the active list, and
 # an `[effort …]` marker that requires `gubia effort set` on a harness
 # without the `gubia` skill fails just as badly as a `[judge]` marker
@@ -2021,7 +2021,7 @@ config_required_skills=(gubia judge)
 # Checks that the `gubia`/`judge` skills are installed in the harness of
 # every model in the active fallback list (`motor-decisiones.md`,
 # "Engine capabilities" → "Validate configuration";
-# `instalacion.md`, "Decided").
+# `installation.md`, "Decided").
 #
 # Walks the fallback list of the active level (`GUBIA_FALLBACK_*`,
 # already sourced by `cmd_config_validate`), resolves each model's agent

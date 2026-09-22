@@ -18,7 +18,7 @@ code in at least five dimensions, verified while writing `vault/spec/` (task
 
 Copying `destilado/` literally would have propagated those errors into
 `vault/`. The following procedure was applied successfully to the four
-`vault/spec/` files (`engine.md`, `catalog.md`, `instalacion.md`, `README.md`)
+`vault/spec/` files (`engine.md`, `catalog.md`, `installation.md`, `README.md`)
 and is reusable for any new `vault/` content:
 
 1. Read the live source cited in the task (`gubia`, `config/agents.sh`,
