@@ -1,4 +1,4 @@
-# Fixture `repo-minimo`
+# Fixture `repo-minimal`
 
 Self-contained synthetic repository for the e2e tests of task 10
 (plan/10.md): `gubia run` launched over its plan must drain all the
@@ -32,7 +32,7 @@ the fixture's plan:
    `.fixture-log/`): the tests count loop turns by counting lines.
 2. Drains ONE subtask (`[x]` + evidence in the task, propagation to the
    plan when the task is exhausted) applying the effect mapped by file name
-   (`saludo.txt`, `salida/echo.txt`, `fin.flag`).
+   (`greeting.txt`, `output/echo.txt`, `done.flag`).
 3. No pending items in any task: creates `plan/stop.md` (step 1 of the
    contract).
 4. Emits `SUBTAREA_COMPLETADA=true`. Exit 0 on completion; 1 on invalid
@@ -47,7 +47,7 @@ as a real agent navigating the repo would.
 
 ```bash
 repo="$(mktemp -d)"
-cp -a tests/fixtures/repo-minimo/. "$repo"/
+cp -a tests/fixtures/repo-minimal/. "$repo"/
 cd "$repo"
 home="$(mktemp -d)"   # installs skills gubia/judge in whatever layout applies
 GUBIA_AGENTS_SH="$repo/config/agents.sh" HOME="$home" \

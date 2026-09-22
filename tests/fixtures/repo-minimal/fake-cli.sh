@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# fake-cli.sh — fake agent CLI of the `repo-minimo` fixture (task 10).
+# fake-cli.sh — fake agent CLI of the `repo-minimal` fixture (task 10).
 #
 # Sibling of the fake CLIs of the e2e suites of tasks 04-06
-# (`tests/gubia_run_max_iteraciones.bats`, `tests/gubia_run_stop_flock.bats`):
+# (`tests/gubia_run_max_iterations.bats`, `tests/gubia_run_stop_flock.bats`):
 # scripted exit codes, zero network and zero credentials, deterministic.
 #
 # Contract it honors (the one the engine's `invoke_` layer produces):
@@ -32,8 +32,8 @@
 #    contract): creates `stop.md` next to the plan with the brief note.
 # 4. Emits `SUBTAREA_COMPLETADA=true`.
 #
-# The effects create exactly the files the e2e tests verify (`saludo.txt`,
-# `salida/echo.txt`, `fin.flag`). The identity of the task file is the key
+# The effects create exactly the files the e2e tests verify (`greeting.txt`,
+# `output/echo.txt`, `done.flag`). The identity of the task file is the key
 # of the mapping, never the subtask text (robust to rewording). A task with
 # no mapped effect dies with exit 1 — the engine reads it as an iteration
 # failure and rotates/aborts, the correct signal for a badly extended
@@ -88,14 +88,14 @@ printf 'tick\n' >>"$marker_dir/marker.log"
 apply_task() {
   case "${task_file##*/}" in
     00.md)
-      printf 'hello fixture\n' >saludo.txt
+      printf 'hello fixture\n' >greeting.txt
       ;;
     01.md)
-      mkdir -p -- salida
-      printf 'fixture echo\n' >salida/echo.txt
+      mkdir -p -- output
+      printf 'fixture echo\n' >output/echo.txt
       ;;
     02.md)
-      printf 'fin\n' >fin.flag
+      printf 'done\n' >done.flag
       ;;
     *)
       printf 'fake-cli: no mapped effect for %s\n' "${task_file##*/}" >&2

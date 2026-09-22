@@ -16,8 +16,8 @@
 # pattern as the e2e suites of tasks 04-06.
 #
 # Like that one, it copies the fixture to a temporary directory (`cp -a`)
-# to isolate it: the `.gubia/` state, the effects (`saludo.txt`,
-# `salida/echo.txt`, `fin.flag`) and `stop.md` itself are born in the
+# to isolate it: the `.gubia/` state, the effects (`greeting.txt`,
+# `output/echo.txt`, `done.flag`) and `stop.md` itself are born in the
 # copy, and the committed fixture stays intact.
 
 GUBIA_BIN="${BATS_TEST_DIRNAME}/../gubia"
@@ -102,9 +102,9 @@ ticks() {
   ! grep -rq -- '- \[ \]' "$repo/plan/"
 
   # Trivial effects of each subtask, with exact content.
-  [ "$(cat "$repo/saludo.txt")" = 'hello fixture' ]
-  [ "$(cat "$repo/salida/echo.txt")" = 'fixture echo' ]
-  [ "$(cat "$repo/fin.flag")" = 'fin' ]
+  [ "$(cat "$repo/greeting.txt")" = 'hello fixture' ]
+  [ "$(cat "$repo/output/echo.txt")" = 'fixture echo' ]
+  [ "$(cat "$repo/done.flag")" = 'done' ]
 
   # One subtask per invocation: 3 draining + 1 repeated (the fake CLI's
   # success signal does not stop the iteration; the turn that WOULD

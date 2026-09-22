@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# agents.sh — agent catalog of the `repo-minimo` fixture (task 10).
+# agents.sh — agent catalog of the `repo-minimal` fixture (task 10).
 #
 # Minimal copy of the pattern of the real repo's `config/agents.sh`, trimmed
 # to what the fixture's e2e tests need: the four agent functions (so that
