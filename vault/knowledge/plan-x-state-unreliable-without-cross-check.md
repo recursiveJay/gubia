@@ -12,7 +12,7 @@ Several distinct symptoms of the same underlying problem — the string of
 The `- [x]` checkboxes in the task file have TWO authors following
 distinct paths: the judge skill (`judge` action) marks them directly in
 the file with its verdict, and the loop binary (`ralph-loop`) writes a
-checkpoint after each `SUBTAREA_COMPLETADA`. Both reach `[x]` via
+checkpoint after each `SUBTASK_COMPLETED`. Both reach `[x]` via
 different routes, and the file can end up with marks from both
 mechanisms mixed on the same line, with later commits dragging that
 mix along (commit `0aefa89` docs(plan): close judge checkboxes and

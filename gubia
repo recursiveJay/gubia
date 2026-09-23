@@ -545,7 +545,7 @@ opening anything.
 3. **Propagate upward**: after marking a subtask, if **all** of the task
    file's subtasks are `[x]`, also mark its entry in the plan.
 4. **Success signal**: if and only if you completed the active subtask, end
-   your output with a line that is exactly `SUBTAREA_COMPLETADA=true` (alone
+   your output with a line that is exactly `SUBTASK_COMPLETED=true` (alone
    on its line). On failure, partial progress, or doubt, don't emit that
    token.
 5. **Stop**. Don't look for the next subtask, don't chain iterations.

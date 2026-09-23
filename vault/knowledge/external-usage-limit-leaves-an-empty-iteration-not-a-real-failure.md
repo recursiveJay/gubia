@@ -7,7 +7,7 @@ type: pitfall
 # External usage limit leaves an empty iteration, not a real failure
 
 If the `.out` of a gubia engine iteration comes out empty (no
-`SUBTAREA_COMPLETADA=true` and no subtask marked) and the corresponding
+`SUBTASK_COMPLETED=true` and no subtask marked) and the corresponding
 `.err` contains an exhausted-usage-limit message from an LLM provider
 (e.g. "You've hit your usage limit... try again at..."), do not interpret
 this as a failure of the work itself or of the task file: it is an
@@ -47,7 +47,7 @@ Discriminate by mtime, not by content: if the `.prompt`/`.out`/`.err` of
 the set are the newest in `.gubia/logs/` and their timestamps sit seconds
 apart (`.prompt` written by `run_prompt`, then `.out`/`.err` created at
 launch), the iteration is in flight. A finished iteration ends with
-`SUBTAREA_COMPLETADA=true` in `.out`, or carries its failure text there.
+`SUBTASK_COMPLETED=true` in `.out`, or carries its failure text there.
 
 In this repo every `.err` of a run holds the CLI's progress line alone
 (`Working...` in iterations 5-25), so the absence of a provider error in

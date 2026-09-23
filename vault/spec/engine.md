@@ -64,7 +64,7 @@ The header fixes the loop's five rules: (1) locate the plan's first
 the plan if none remain; (2) execute a single subtask per iteration, with
 the bounded exception of work already done (max 3 skips with nameable
 evidence); (3) propagate `[x]` upward when a task file completes; (4)
-emit `SUBTAREA_COMPLETADA=true` only if the active subtask was completed;
+emit `SUBTASK_COMPLETED=true` only if the active subtask was completed;
 (5) stop. A `[judge]` is never skippable and requires the `judge` skill
 installed.
 
@@ -80,7 +80,7 @@ normalized prefix), a check that `[ ]`→`[x]` transitions form a contiguous
 prefix, and a warning on stderr. **That capability is absent from the
 live code**: there's no `integrity_` layer, no snapshot, no transition
 check, no `sha1` computation. The loop trusts the
-`SUBTAREA_COMPLETADA=true` token and the judge to catch improper skips.
+`SUBTASK_COMPLETED=true` token and the judge to catch improper skips.
 The detector (in warning mode) and abort/revert are left for v1.1/v2 (see
 "Milestones").
 
@@ -335,7 +335,7 @@ nothing gets done until the full graph is ready.
   because today killing the engine's PID would kill the whole loop
   instead of just the hung iteration.
 - **v2 — what the graph-based parser requires**: prompt truncation,
-  `Active task:`, an actionable token (`SUBTAREA_COMPLETADA=true` goes
+  `Active task:`, an actionable token (`SUBTASK_COMPLETED=true` goes
   from telemetry to actionable), check-off authority in the engine's
   hands (the engine marks `[x]` when the agent returns the token),
   `switch_on_exhaustion` with its exhaustion detector, and the
@@ -350,7 +350,7 @@ nothing gets done until the full graph is ready.
   decoupled from the engine's version. Updating the engine doesn't leave
   old plans running under old rules.
 - **Literal termination token as success signal**:
-  `SUBTAREA_COMPLETADA=true`, parseable with a `grep`, with the burden of
+  `SUBTASK_COMPLETED=true`, parseable with a `grep`, with the burden of
   proof on the agent.
 - **Exception with mandatory evidence**: allow a shortcut only if whoever
   takes it puts the justifying proof in writing.

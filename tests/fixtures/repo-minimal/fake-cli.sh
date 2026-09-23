@@ -30,7 +30,7 @@
 #    pending items, propagates its plan entry to `[x]`.
 # 3. If no `- [ ]` remains in the plan nor in its tasks (step 1 of the
 #    contract): creates `stop.md` next to the plan with the brief note.
-# 4. Emits `SUBTAREA_COMPLETADA=true`.
+# 4. Emits `SUBTASK_COMPLETED=true`.
 #
 # The effects create exactly the files the e2e tests verify (`greeting.txt`,
 # `output/echo.txt`, `done.flag`). The identity of the task file is the key
@@ -169,7 +169,7 @@ done <"$plan_file"
 #    file present the engine cuts before invoking again.
 if [[ -z "$task_file" ]]; then
   printf 'plan completo, sin subtareas pendientes\n' >"$plan_dir/stop.md"
-  printf 'SUBTAREA_COMPLETADA=true\n'
+  printf 'SUBTASK_COMPLETED=true\n'
   exit 0
 fi
 
@@ -197,5 +197,5 @@ if ! first_open_line "$task_file"; then
     sed -i "${entry_line}s/- \[ \]/- [x]/" "$plan_file"
   fi
 fi
-printf 'SUBTAREA_COMPLETADA=true\n'
+printf 'SUBTASK_COMPLETED=true\n'
 exit 0

@@ -35,7 +35,7 @@ the fixture's plan:
    (`greeting.txt`, `output/echo.txt`, `done.flag`).
 3. No pending items in any task: creates `plan/stop.md` (step 1 of the
    contract).
-4. Emits `SUBTAREA_COMPLETADA=true`. Exit 0 on completion; 1 on invalid
+4. Emits `SUBTASK_COMPLETED=true`. Exit 0 on completion; 1 on invalid
    usage.
 
 The prompt arrives via argv (path of the file the engine composes, `file`

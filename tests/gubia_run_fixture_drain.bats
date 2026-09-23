@@ -111,7 +111,7 @@ ticks() {
   # create the stop file creates it), and the fifth no longer invokes
   # the agent — the stop file is checked when opening each iteration.
   [ "$(ticks)" -eq 4 ]
-  [ "$(grep -l -- '^SUBTAREA_COMPLETADA=true$' "$repo"/.gubia/logs/*.out | wc -l)" -eq 4 ]
+  [ "$(grep -l -- '^SUBTASK_COMPLETED=true$' "$repo"/.gubia/logs/*.out | wc -l)" -eq 4 ]
   [ ! -e "$repo/.gubia/logs/5.out" ]
   [ ! -e "$repo/.gubia/logs/5.prompt" ]
 }
