@@ -187,7 +187,7 @@ agent_probe() {
   GUBIA_ENV=()
 }
 EOF
-  # `max_iteraciones=1`: the probe exits 0 and creates no stop file, so
+  # `max_iterations=1`: the probe exits 0 and creates no stop file, so
   # without a ceiling the engine would spin the default 500 turns. A
   # single iteration is enough for what this test observes.
   GUBIA_AGENTS_SH="$repo/config/agents.sh" \
@@ -222,7 +222,7 @@ agent_probe() {
   GUBIA_ENV=()
 }
 EOF
-  # `max_iteraciones=1`: the probe exits 0 and creates no stop file, so
+  # `max_iterations=1`: the probe exits 0 and creates no stop file, so
   # without a ceiling the engine would spin the default 500 turns. A
   # single iteration is enough for what this test observes.
   GUBIA_AGENTS_SH="$repo/config/agents.sh" \

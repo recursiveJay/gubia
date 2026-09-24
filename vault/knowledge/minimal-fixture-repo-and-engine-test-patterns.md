@@ -24,8 +24,8 @@ CLI `fake-cli.sh` + its own `config/agents.sh`. Consolidated pattern:
    the turn that WOULD create the stop file creates it and it is checked
    when opening the next one (`gubia_run_fixture_drain.bats:109-116`).
 4. Discriminate the TWO possible exit 0s of `gubia run` — stop file created
-   vs `max_iteraciones reached` — with a grep of "stop file present" and a
-   negated grep of "max_iteraciones reached", with an external `timeout 60`
+   vs `max_iterations reached` — with a grep of "stop file present" and a
+   negated grep of "max_iterations reached", with an external `timeout 60`
    as a belt (`gubia_run_fixture_drain.bats:88-94`).
 5. The judge can run the fake CLI from the real repo root without
    `GUBIA_ROOT`/`GUBIA_FIXTURE_LOG` and leave untracked artifacts
