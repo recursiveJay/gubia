@@ -20,4 +20,4 @@ manual invocation `/scribe consolidar` (aborts if `vault/` doesn't exist).
   interdependent.
 - Never prunes just to lower the count; never loses irreplaceable evidence
   when merging — keeps it from both source entries.
-- Doesn't implement product code. Doesn't touch `destilado/`.
+- Doesn't implement product code. Only writes under `vault/knowledge/`.

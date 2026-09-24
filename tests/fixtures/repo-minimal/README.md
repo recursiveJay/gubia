@@ -25,7 +25,8 @@ progress.
 
 ## Fake CLI contract
 
-One invocation = one iteration of the contract (`motor-contrato.md`) over
+One invocation = one iteration of the contract (`vault/spec/engine.md`,
+§ "Contract injected per iteration") over
 the fixture's plan:
 
 1. Signs a `tick` line in `$GUBIA_FIXTURE_LOG/marker.log` (or

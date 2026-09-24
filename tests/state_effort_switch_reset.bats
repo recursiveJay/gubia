@@ -5,7 +5,7 @@
 # and new levels have different lengths
 # (plan/02.md, final subtask: "with lists of different lengths").
 #
-# catalogo-agentes.md documents the three real lists:
+# vault/spec/catalog.md documents the three real lists:
 # fallback.default.low has 3 models, medium and high have 4. A
 # `model_index` valid in a list of 4 (e.g. 3) falls out of
 # range in the list of 3 of the low level if it is not reset when

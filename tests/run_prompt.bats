@@ -2,7 +2,8 @@
 
 # Test of the injected prompt composition (plan/04.md: "Implement the
 # injected prompt composition: fixed literal header from
-# `motor-contrato.md` followed by the full content of the plan file,
+# `vault/spec/engine.md` § "Contract injected per iteration" followed by
+# the full content of the plan file,
 # with no truncation or concatenation of task files").
 #
 # The observable contract (`vault/spec/engine.md`, "Composition:

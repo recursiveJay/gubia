@@ -18,7 +18,8 @@
 #   (missing prompt, missing plan or task, unmapped effect).
 #
 # What it does in the test repo — simulates the contract's iterator
-# (`motor-contrato.md`), ONE subtask per invocation:
+# (`vault/spec/engine.md`, § "Contract injected per iteration"), ONE
+# subtask per invocation:
 #
 # 1. Witness: appends a `tick` line to `$GUBIA_FIXTURE_LOG/marker.log`
 #    (equivalent to the `agent.marker` of the 04-06 tests); the tests count

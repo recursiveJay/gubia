@@ -3,7 +3,7 @@
 # e2e test of the two concurrency exits of the loop
 # (plan/06.md: "Implement the stop file check before each iteration of
 # the `gubia run` loop, stopping if it exists" and
-# "motor-decisiones.md", "Concurrencia": the per-plan `flock`).
+# "vault/spec/engine.md", "Concurrency": the per-plan `flock`).
 #
 # The two existing bats tests touch each piece separately
 # (`gubia_run_max_iterations.bats` tests the stop file against an agent

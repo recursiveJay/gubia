@@ -23,5 +23,5 @@ Pending `[scribe]` subtask, last one in the task file with everything else
   mode (same file, risk of collision).
 - If after applying changes `vault/knowledge/` has >10 files, chains into
   `consolidate.md` in the same invocation.
-- Doesn't implement product code or fix task files; only distills. Doesn't
-  touch `destilado/`.
+- Doesn't implement product code or fix task files; only distills. Only
+  writes under `vault/knowledge/`.
