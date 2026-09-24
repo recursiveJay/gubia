@@ -192,3 +192,26 @@ occurrence of the same failure and leaves the plan's closure gate
 unverifiable; choosing the fix for the second mutates user WIP. The judgement
 is about whether the reconciliation is *known and local*, not about whether
 the file is in the task's Scope.
+
+## Invalid-value sentinels must not collide with valid enum values (methodology)
+
+When a test injects an invalid value to exercise a field's validation path,
+the sentinel must be **unambiguously invalid** for that field's enum — never
+a value that is valid in another position of the same field. `effort_level`
+is validated against `low|medium|high`; the invalid value is `bogus`, **not
+`low`**, because `low` is itself a valid level and injecting it would not
+exercise the rejection branch at all. The engine-side validation and the
+test-side injection are coupled: the rejection message echoes the injected
+value back (`invalid value for effort_level: bogus (expected:
+low|medium|high)`), so the accepted-values check and the test's injection +
+sibling assertion must move in the same commit.
+
+General rule: before renaming or replacing an invalid-value sentinel,
+enumerate the field's valid values and assert the chosen sentinel is not
+among them; a sentinel that collides with a valid value silently turns the
+negative test into a no-op (or a positive test).
+
+Evidence: `tests/gubia_config_validate.bats:211` (injection
+`effort_level=bogus`) and `:215` (assertion `invalid value for effort_level:
+bogus (expected: low|medium|high)`); `tests/gubia_effort_set.bats:113` (loop
+over `bogus`).
