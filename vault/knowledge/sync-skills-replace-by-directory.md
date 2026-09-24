@@ -38,3 +38,18 @@ commit `97c479a`) edited the same reference sites in both trees —
 rule itself is stated only in the migration plan
 (`plan/task/01.md:17`), a temporary file that is deleted with `plan/`, which
 is why it is recorded here.
+
+## The mirror can drift stale — grep the lockstep, not just the source
+
+Lockstep is a manual discipline, so the mirror silently goes stale when a
+change is applied to `skills/` but not to `vault/skills/` (or vice versa).
+The closing lexical sweep of a migration phase must therefore grep **both
+trees**, not just the operational `skills/`: a term that was translated in
+`skills/` can survive in the mirror as a Spanish leftover.
+
+Evidence: fase 2's closing sweep (task 05, commit `80f652b`) found
+`vault/skills/scribe/consolidate.md:12` still citing the manual command
+`/scribe consolidar` while its lockstep source `skills/scribe/consolidate.md:16`
+had already been translated to `/scribe consolidate`. The mirror line is a
+live command reference (not historical narration), so it is in scope and was
+corrected, not excused.

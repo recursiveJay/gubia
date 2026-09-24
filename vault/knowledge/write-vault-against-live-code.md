@@ -238,3 +238,27 @@ line rather than dropping them to honor the list. Evidence:
 `plan/task/01.md` commit line — "commit 7e95f0b, 8 files; also staged
 gubia_run_stop_flock.bats and repo-minimal fixtures — they carry citation
 repoints the listed paths omitted".
+
+## An accent-character class needs a UTF-8 locale, or it matches bytes
+
+A regex class of accented letters (`[áéíóúüñÁÉÍÓÚÜÑ¿¡]`) matches the intended
+characters only when the matcher decodes input as UTF-8. Under the default
+`LC_ALL=C`, `grep`/`git grep` treat the class as a **byte set**, so every
+multi-byte UTF-8 sequence sharing one of those bytes matches — `≥` (U+2265),
+`≠` (U+2260), `≤` (U+2264), `§` (U+00A7), the em-dash (U+2014), and emoji
+(`❌`/`✅`) all false-positive. Symptom: an "accent sweep" reports dozens of
+lines that visibly carry no Spanish accent.
+
+Fix before trusting the count: force a UTF-8 locale — `export
+LC_ALL=C.UTF-8` before `grep`, or use a UTF-8-aware matcher (`grep -P
+'(*UTF)[…]'`, or a Python scan decoding files as UTF-8). Then classify each
+surviving hit by hand (several are legitimately out of scope: attribution,
+design rationales, historical narrations), never by the raw number.
+
+Evidence: fase 2's step-5 exhaustive sweep (`plan/fase2.md`) ran the accent
+regex under `LC_ALL=C`; the byte-mode run reported ~40 hits (`≥`/`≠`/`≤`/
+`§`/`—`/`❌`/`✅` plus the real `Javi García Peña` and `¡escriba esto!`),
+while the UTF-8-exact sweep returned only 4 genuine Spanish-character lines
+(`LICENSE:189`, `NOTICE:2,4`, `skills/scribe/SKILL.md:11`). The migration's
+own reference script `scripts/check-language.sh` documents the same trap and
+sets `export LC_ALL=C.UTF-8` for this reason.
