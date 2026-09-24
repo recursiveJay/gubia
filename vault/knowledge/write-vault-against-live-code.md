@@ -190,6 +190,20 @@ Same lesson as "A plan's reference inventory is a claim about the repo, not a
 fact", from the criterion side: both are plan-time claims to re-derive before
 acting, not to satisfy by force.
 
+## A fan-out inventory subtask is split into chunks before the loop runs it
+
+A reference-repoint subtask whose site list runs into the tens (the 43
+`motor-decisiones.md` citations in `plan/task/01.md`) is a fan-out that spans
+far more than one iteration, and that shape collides with the loop's
+"already done" exception: verifying each site as already-done burns the
+3-consecutive-skip budget and stalls the loop (task 01 hit the limit twice —
+`.gubia/logs/9.out`, `.gubia/logs/2.out`). Split such a subtask during the
+phase-0 simplification pass into chunks sized so each is a single iteration
+(43 sites became 11/11/11/10), keeping the per-chunk line ranges explicit on
+each subtask line so a completed chunk records what it covered. Evidence:
+`.gubia/logs/15.out` — "split the one fan-out candidate ... into four chunks
+of 11/11/11/10 line numbers."
+
 ## The `[commit]` subtask commits what earlier iterations already staged
 
 The phase-0 scaffold splits each rename into separate subtasks: the rename
@@ -211,3 +225,16 @@ left unstaged.
 Evidence: `plan/task/01.md:45` and `plan/task/02.md:41` state it on the
 subtask line; `.gubia/logs/13.out:1` and `.gubia/logs/19.out:4` show both
 rename commits of this phase leaving `config/agents.sh` out.
+
+The explicit-path list on the `[commit]` subtask line is itself a plan-time
+claim and can **under-specify** the touched set: when the repointing spread
+further than the listed paths, the commit subtask of task 01 found two
+additional files (`gubia_run_stop_flock.bats`, the `repo-minimal` fixtures)
+that carry the same citation repoints but were omitted from the listed six.
+The authoritative set is the working tree (`git status`/`git diff`), not the
+scaffold's path list: stage every file that actually carries the change,
+including the ones the list missed, and record the deviation on the subtask
+line rather than dropping them to honor the list. Evidence:
+`plan/task/01.md` commit line — "commit 7e95f0b, 8 files; also staged
+gubia_run_stop_flock.bats and repo-minimal fixtures — they carry citation
+repoints the listed paths omitted".
