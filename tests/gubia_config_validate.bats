@@ -208,11 +208,11 @@ EOF
   # `effort_level` is validated by `state_validate` abortively (exit 2)
   # before dispatching to `cmd_config_validate`: the observable result
   # is the same — `gubia config validate` ends with exit ≠ 0.
-  sed -i 's|^effort_level=.*|effort_level=bajo|' .gubia/state.env
+  sed -i 's|^effort_level=.*|effort_level=bogus|' .gubia/state.env
   GUBIA_AGENTS_SH="$repo/config/agents.sh" HOME="$home" \
     run "$GUBIA_BIN" config validate
   [ "$status" -eq 2 ]
-  grep -q 'invalid value for effort_level: bajo (expected: low|medium|high)' <<<"$output"
+  grep -q 'invalid value for effort_level: bogus (expected: low|medium|high)' <<<"$output"
 }
 
 @test "config validate fails (exit 2) and names the skill and the agent when a skill is missing in a harness" {

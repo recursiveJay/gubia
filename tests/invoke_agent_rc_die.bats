@@ -54,26 +54,26 @@ run_acquire_lock
 run_export_env
 mkdir -p .gubia/logs
 invoke_agent agent_fake m1 medium true 1
-printf 'invoke_agent devolvio sin morir: rc=%d\n' "\$?"
+printf 'invoke_agent returned without dying: rc=%d\n' "\$?"
 EOF
   run bash "$repo/run_invoke.sh"
 }
 
 @test "exit 127 (missing CLI): immediate die with exit 2, never rotation" {
-  run_invoke "$bin/no-existe-cli"
+  run_invoke "$bin/nonexistent-cli"
   [ "$status" -eq 2 ]
   [[ "$output" == *127* ]]
-  [[ "$output" != *'invoke_agent devolvio'* ]]
+  [[ "$output" != *'invoke_agent returned'* ]]
 }
 
 @test "exit 126 (non-executable CLI): immediate die with exit 2, never rotation" {
-  cat >"$bin/no-ejecutable" <<'CLI'
+  cat >"$bin/non-executable" <<'CLI'
 #!/usr/bin/env bash
 exit 0
 CLI
-  chmod -x "$bin/no-ejecutable"
-  run_invoke "$bin/no-ejecutable"
+  chmod -x "$bin/non-executable"
+  run_invoke "$bin/non-executable"
   [ "$status" -eq 2 ]
   [[ "$output" == *126* ]]
-  [[ "$output" != *'invoke_agent devolvio'* ]]
+  [[ "$output" != *'invoke_agent returned'* ]]
 }

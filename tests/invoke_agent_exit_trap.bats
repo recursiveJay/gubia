@@ -101,14 +101,14 @@ teardown() {
   # would treat as a test failure before anything could be inspected.
   set +e
   "$GUBIA_BIN" run plan/plan.md >"$repo/run.out" 2>"$repo/run.err"
-  motor_rc=$?
+  engine_rc=$?
   set -e
 
   # The engine re-emits the captured rc: an EXIT trap that did not do
   # `exit "$rc"` would let through the rc of the trap's last command
   # (here the guard `[[ -z … ]]`, exit 0) and the parent would see 0
   # for a real loop abort.
-  [ "$motor_rc" -eq 3 ]
+  [ "$engine_rc" -eq 3 ]
 
   # The lockfile stays on disk after the process exits: the trap does
   # not delete it ("never delete the lockfile in the trap").

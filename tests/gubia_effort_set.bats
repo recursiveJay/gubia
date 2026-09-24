@@ -44,7 +44,7 @@ teardown() {
 write_sleeping_agent() {
   cat >"$bin/sleep-cli" <<'CLI'
 #!/usr/bin/env bash
-printf 'arrancado\n' >>"$AGENT_MARKER"
+printf 'started\n' >>"$AGENT_MARKER"
 sleep 60
 CLI
   chmod +x "$bin/sleep-cli"
@@ -78,11 +78,11 @@ wait_for_lock() {
 }
 
 @test "effort set writes the requested level to state.env, for all three levels" {
-  local nivel
-  for nivel in low high medium; do
-    run "$GUBIA_BIN" effort set "$nivel"
+  local level
+  for level in low high medium; do
+    run "$GUBIA_BIN" effort set "$level"
     [ "$status" -eq 0 ]
-    grep -q "^effort_level=${nivel}\$" .gubia/state.env
+    grep -q "^effort_level=${level}\$" .gubia/state.env
   done
 }
 
@@ -107,13 +107,13 @@ EOF
 
 @test "an invalid or absent level dies with exit 2 and leaves state.env as it was" {
   "$GUBIA_BIN" effort set high
-  cp .gubia/state.env "$repo/antes.env"
+  cp .gubia/state.env "$repo/before.env"
 
-  local malo
-  for malo in bajo LOW '' ' ' medium=high; do
-    run "$GUBIA_BIN" effort set "$malo"
+  local bad
+  for bad in bogus LOW '' ' ' medium=high; do
+    run "$GUBIA_BIN" effort set "$bad"
     [ "$status" -eq 2 ]
-    diff "$repo/antes.env" .gubia/state.env
+    diff "$repo/before.env" .gubia/state.env
   done
 }
 

@@ -46,7 +46,7 @@ setup() {
 }
 
 @test "plan with a nonexistent directory dies with exit 2 and its own message" {
-  run run_resolve_plan no-existe/plan.md
+  run run_resolve_plan does-not-exist/plan.md
   [ "$status" -eq 2 ]
   grep -q 'cannot resolve plan path' <<<"$output"
 }

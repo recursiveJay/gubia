@@ -20,8 +20,8 @@ GUBIA_BIN="${BATS_TEST_DIRNAME}/../gubia"
 
   # Exactly the 6 keys, no more, no less.
   [ "$(grep -c '=' .gubia/state.env)" -eq 6 ]
-  while IFS= read -r clave; do
-    grep -q "^${clave}=" .gubia/state.env
+  while IFS= read -r key; do
+    grep -q "^${key}=" .gubia/state.env
   done <<'EOF'
 effort_level
 fallback_list

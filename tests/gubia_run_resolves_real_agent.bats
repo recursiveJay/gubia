@@ -110,9 +110,9 @@ CLI
 }
 
 @test "a 127 rc during the iteration dies with exit 2 without rotating model_index" {
-  # `claude-ausente` does not exist: exit 127 from `wait`, captured BEFORE
+  # `claude-absent` does not exist: exit 127 from `wait`, captured BEFORE
   # the task 06 rotation can touch `model_index`.
-  write_catalog "$bin/claude-ausente" "$bin/probe-cli"
+  write_catalog "$bin/claude-absent" "$bin/probe-cli"
 
   run_gubia 3
   [ "$status" -eq 2 ]

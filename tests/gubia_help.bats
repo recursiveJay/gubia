@@ -51,8 +51,8 @@ teardown() {
 }
 
 @test "gubia run with a nonexistent plan aborts with exit 2 without taking the lock" {
-  run "$GUBIA_BIN" run no-existe.md
+  run "$GUBIA_BIN" run does-not-exist.md
   [ "$status" -eq 2 ]
   grep -q 'plan does not exist' <<<"$output"
-  [ ! -e .gubia/no-existe.md.lock ]
+  [ ! -e .gubia/does-not-exist.md.lock ]
 }

@@ -169,7 +169,7 @@ done <"$plan_file"
 #    creates `stop.md` next to the plan with the brief note. With the stop
 #    file present the engine cuts before invoking again.
 if [[ -z "$task_file" ]]; then
-  printf 'plan completo, sin subtareas pendientes\n' >"$plan_dir/stop.md"
+  printf 'plan complete, no pending subtasks\n' >"$plan_dir/stop.md"
   printf 'SUBTASK_COMPLETED=true\n'
   exit 0
 fi

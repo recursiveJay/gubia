@@ -95,7 +95,7 @@ ticks() {
 
   # The stop file is born NEXT TO THE PLAN, with the contract's short note.
   [ -f "$repo/plan/stop.md" ]
-  grep -q 'plan completo, sin subtareas pendientes' "$repo/plan/stop.md"
+  grep -q 'plan complete, no pending subtasks' "$repo/plan/stop.md"
 
   # Full drain: neither the plan nor its task files keep pending items
   # (propagation pushed the `[x]` up to every entry).

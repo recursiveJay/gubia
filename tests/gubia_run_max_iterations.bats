@@ -119,11 +119,11 @@ ticks() {
 }
 
 @test "an invalid max_iterations dies with exit 2 without invoking the agent or taking the lock" {
-  local malo
-  for malo in 0 -1 abc 2.5 ' '; do
+  local bad
+  for bad in 0 -1 abc 2.5 ' '; do
     rm -f "$repo/agent.marker"
     GUBIA_AGENTS_SH="$repo/config/agents.sh" \
-      run "$GUBIA_BIN" run plan/plan.md "$malo"
+      run "$GUBIA_BIN" run plan/plan.md "$bad"
     [ "$status" -eq 2 ]
     grep -q 'invalid max_iterations' <<<"$output"
     [ "$(ticks)" -eq 0 ]
