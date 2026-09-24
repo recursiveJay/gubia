@@ -43,7 +43,7 @@ awk -v entry="$entry" '
   $0 == entry { next }
   {
     print
-    if ($0 == "## Tareas" || $0 == "## Tasks") {
+    if ($0 == "## Tasks") {
       print ""
       print entry
       inserted = 1

@@ -103,13 +103,13 @@ HDR
   cat >plan/task/04.md <<'TASK'
 # Task 04
 
-## Subtareas
-- [ ] pendiente uno
+## Subtasks
+- [ ] pending one
 TASK
   cat >plan/plan.md <<'PLAN'
 # Plan
 
-## Tareas
+## Tasks
 - [ ] [Task 04](task/04.md)
 - [x] [Task 03](task/03.md)
 PLAN
@@ -167,7 +167,7 @@ PLAN
   cat >plan/plan.md <<'PLAN'
 # Plan
 
-## Tareas
+## Tasks
 - [ ] [Task 04](task/04.md)
 - [x] [Task 03](task/03.md)
 PLAN
