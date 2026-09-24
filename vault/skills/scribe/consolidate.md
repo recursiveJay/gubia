@@ -9,7 +9,7 @@ fires.
 ## When it fires
 
 Chained from `review.md` when the count exceeds 10 after its changes; or
-manual invocation `/scribe consolidar` (aborts if `vault/` doesn't exist).
+manual invocation `/scribe consolidate` (aborts if `vault/` doesn't exist).
 
 ## Key rules
 
