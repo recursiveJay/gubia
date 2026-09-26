@@ -6,7 +6,8 @@ type: pitfall
 
 # Just lint does not cover gubia
 
-`just lint` (defined in `justfile`) runs `find . -name '*.sh' | xargs -r shellcheck`.
+`just lint` (defined in `justfile`) runs `find . … -type f -name '*.sh' -print | xargs -r shellcheck -x`
+(pruning `.git` and `tests/vendor`).
 The repo's main executable, `gubia`, has no `.sh` extension (it is a bash script
 with a shebang but no suffix), so that `find` **never picks it up**. `just lint` can
 finish green without having run shellcheck over `gubia` even once.
@@ -21,3 +22,11 @@ while the real tree state included the new test without shellcheck
 ("just lint exit 0" in `.ralph/logs/plan/iteration-000352-20260829-211550.log`).
 First invoke lint with the variant that covers gubia, and don't trust a green
 that only guarantees the files `find -name '*.sh'` finds.
+
+It recurred at plan-writing time in the fase-2 fix-a task (engine monotonic
+log sequence, commit 208482e): the task file's Constraints and `[judge]`
+acceptance criterion named `just lint` as the lint gate for a change that only
+touched `gubia`. The implementing iterations noticed ("it only checks `*.sh`
+files, so it never looks at `gubia`") and ran `shellcheck -x gubia` by hand
+alongside it. When writing constraints or acceptance criteria for any change
+to `gubia`, name `scripts/lint-gubia.sh` as the gate, not `just lint`.

@@ -40,7 +40,8 @@ distinct arity contracts. Adding an agent to the catalog = adding a `case`
 with its real arity, never inventing a common interface.
 
 The per-file prompt (`GUBIA_PROMPT_MODE=file`) already lives in
-`.gubia/logs/<iter>.prompt`; it is passed to the agent's function as a
+`.gubia/logs/<log_seq>.prompt` (`gubia:1116`; `<log_seq>` is the
+monotonic sequence number, not the per-run `iter`); it is passed to the agent's function as a
 positional argument, and it is the function itself that wires it into
 `GUBIA_ARGV` with its flag (`-p "@$prompt_file"` in omp, `--prompt-file`
 in devin). The prompt is not appended to the end of `GUBIA_ARGV`
