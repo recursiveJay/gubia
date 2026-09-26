@@ -23,5 +23,9 @@ Pending `[scribe]` subtask, last one in the task file with everything else
   mode (same file, risk of collision).
 - If after applying changes `vault/knowledge/` has >10 files, chains into
   `consolidate.md` in the same invocation.
+- LOGS subagent orders `.gubia/logs/*.out` by modification time newest-first
+  (e.g. `stat -c '%Y %n' .gubia/logs/*.out | sort -rn`, or `ls -t
+  .gubia/logs/*.out`); never by the numeric prefix, which is not monotonic
+  across relaunches.
 - Doesn't implement product code or fix task files; only distills. Only
   writes under `vault/knowledge/`.
