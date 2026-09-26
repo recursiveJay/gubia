@@ -160,6 +160,13 @@ then re-run `env -u GUBIA_AGENTS_SH just test` to `141 ok / 0 not ok`. The
 catalog edit itself stays uncommitted as a separate concern — it is never
 swept into the task's logical commit.
 
+The separation is at **hunk** granularity, not file granularity: task 01
+added `--respect-workspace-trust false` to `agent_devin` while the *same*
+`config/agents.sh` carried the uncommitted model-name WIP. Commit it with
+`git add -p`, staging only the in-scope hunk (2 insertions, commit 4bd9e78)
+plus the full edited test file — never `git add -A`/`git commit -a`, which
+would sweep the WIP in alongside the task's change.
+
 Preventive guidance: before editing `config/agents.sh` model lists, grep the
 tests for hardcoded model names (e.g.
 `grep -rn 'codex-medium\|codex-low\|omp-medium' tests/`). A removed entry that
