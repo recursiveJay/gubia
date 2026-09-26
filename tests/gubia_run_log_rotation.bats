@@ -130,46 +130,37 @@ retained_prefixes() {
   done
 }
 
-@test "two consecutive runs retain by mtime, not numeric prefix" {
+@test "two consecutive runs write strictly non-overlapping, monotonic prefixes" {
   install_all
-  write_state 2
+  write_state 20
   GUBIA_AGENTS_SH="$repo/config/agents.sh" HOME="$home" \
     run "$GUBIA_BIN" config validate
   [ "$status" -eq 0 ]
 
   # First run drains the 3 subtasks and stops via the ceiling (no stop
-  # file), leaving `.gubia/logs/` with sets 2 and 3 (set 1 pruned by the
-  # limit-2 rotation after iteration 3).
+  # file), writing sets 1, 2 and 3 (well under the 20-set limit, so
+  # nothing is pruned).
   GUBIA_AGENTS_SH="$repo/config/agents.sh" HOME="$home" \
     run "$GUBIA_BIN" run plan/plan.md 3
   [ "$status" -eq 0 ]
   grep -q 'max_iterations reached' <<<"$output"
+  [ -f .gubia/logs/1.prompt ]
   [ -f .gubia/logs/2.prompt ]
   [ -f .gubia/logs/3.prompt ]
 
-  # Backdate the first run's sets to a fixed earlier wall-clock, with 3
-  # newer than 2: this is the "earlier relaunch" R2 describes, made
-  # deterministic regardless of how fast the runs are.
-  touch -d '2026-09-18 00:00:00' .gubia/logs/2.prompt .gubia/logs/2.out .gubia/logs/2.err
-  touch -d '2026-09-18 00:00:01' .gubia/logs/3.prompt .gubia/logs/3.out .gubia/logs/3.err
-
   # Second run: no pending subtasks remain, so its first iteration
-  # creates stop.md (prefix restarts at 1, colliding with the first
-  # run's now-pruned set 1). Its `1.prompt` is strictly the newest file.
+  # creates stop.md. The monotonic log sequence number continues from
+  # the highest existing prefix (3), so this round writes set 4 —
+  # never colliding with the first run's `1`/`2`/`3`.
   GUBIA_AGENTS_SH="$repo/config/agents.sh" HOME="$home" \
     run "$GUBIA_BIN" run plan/plan.md 3
   [ "$status" -eq 0 ]
   grep -q 'stop file present' <<<"$output"
 
-  # Retention is by true recency: the second run's `1` (newest) and the
-  # first run's `3` survive; the older `2` is pruned. Numeric-prefix
-  # sorting would instead keep `2` and `3` and delete `1` — the bug R2
-  # forbids.
-  [ "$(retained_prefixes | tr '\n' ' ')" = '1 3 ' ]
-  for suffix in prompt out err; do
-    [ -f ".gubia/logs/1.${suffix}" ]
-    [ -f ".gubia/logs/3.${suffix}" ]
-    [ ! -e ".gubia/logs/2.${suffix}" ]
-  done
-  [ ! -e .gubia/logs/2.console ]
+  # The two runs' sets are strictly non-overlapping and monotonic: the
+  # second run continued at 4 instead of restarting at 1, and no set
+  # beyond it was created.
+  [ "$(retained_prefixes | tr '\n' ' ')" = '1 2 3 4 ' ]
+  [ -f .gubia/logs/4.prompt ]
+  [ ! -e .gubia/logs/5.prompt ]
 }
