@@ -42,3 +42,16 @@ iteration, self-noting "Stopping here per single-action rule" only after
 doing both. Same violation shape as task 04's translation run — two real
 subtasks in one pass because each looked trivial — not the skip exception
 (neither was pre-existing work).
+
+The forward-edit consequence of that same task is the **doc-task
+"already present"** variant, observed in task 02 of the stop.md plan: the
+spec wording for the new `stop.md` (`vault/spec/engine.md:169-175` and the
+exit-code row `:193`) was written during task 01's implementation iterations,
+so task 02's two documentation subtasks resolved via the skip with evidence
+reading `already present` (`plan/task/02.md:48-49`). The edits were real work
+done out of order, not pre-existing state. This is predictable when a plan
+splits "implement X" (code) and "document X" (spec) into separate tasks: the
+implementer writes the doc alongside the code, and the later doc task finds
+the spec already updated. The skip exception still does not genuinely apply —
+the right split keeps code and doc in one iteration, or leaves the doc for its
+own task without pre-writing it.
