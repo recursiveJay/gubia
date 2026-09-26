@@ -51,16 +51,16 @@ setup() {
 }
 
 @test "sourcing the catalog without scripts/ next to config/ does not abort (the probe is lazy)" {
-  mkdir -p "$BATS_TEST_TMPDIR/solo-config/config"
-  cp "$AGENTS_SH" "$BATS_TEST_TMPDIR/solo-config/config/agents.sh"
+  mkdir -p "$BATS_TEST_TMPDIR/only-config/config"
+  cp "$AGENTS_SH" "$BATS_TEST_TMPDIR/only-config/config/agents.sh"
 
-  cd "$BATS_TEST_TMPDIR/solo-config"
+  cd "$BATS_TEST_TMPDIR/only-config"
   # `set -e` reproduces the engine's context: before, the `cd` to
   # `../scripts` of the top-level `config_probe_abs` aborted the whole
   # source and took the real fallback lists with it.
   run bash -c 'set -euo pipefail; source config/agents.sh; declare -p GUBIA_FALLBACK_MEDIUM'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"codex-medium"* ]]
+  [[ "$output" == *"omp-medium"* ]]
 }
 
 @test "agent_probe: incorrect usage (fewer than 3 arguments) returns 2" {

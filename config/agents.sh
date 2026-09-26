@@ -3,11 +3,9 @@
 #
 # agents.sh — gubia engine's global agent catalog.
 #
-# Sourceable translation of `destilado/referencia/agents.toml` (see
-# `destilado/catalogo-agentes.md`): one function per agent —
-# `agent_codex`, `agent_claude`, `agent_omp`, `agent_devin` — that
-# builds the invocation argv/env, and model/fallback arrays per
-# level (low/medium/high).
+# One function per agent — `agent_codex`, `agent_claude`, `agent_omp`,
+# `agent_devin` — that builds the invocation argv/env, and model/fallback
+# arrays per level (low/medium/high).
 #
 # Human/engine config, never an iteration agent's: it gets sourced
 # (never parsed with an allowlist, unlike `.gubia/state.env`). It
@@ -22,7 +20,7 @@
 # linter can't resolve that path at lint time.
 
 # ---------------------------------------------------------------------------
-# Models — literal translation of the [models.*] entries in agents.toml.
+# Models — one entry per catalog model.
 # Key: catalog entry name; value: "agent model", as-is.
 # SC2034: the arrays are consumed after `source` from the engine, not in
 # this file; shellcheck will always flag them as unused.
@@ -34,30 +32,28 @@ declare -rA GUBIA_MODELS=(
     [codex-medium]="codex gpt-5.6-terra"
     [claude-medium]="claude sonnet"
     [claude-high]="claude opus"
-    [omp-low]="omp deepseek-v4-flash:0731"
+    [omp-low]="omp gemma4:31b"
     [omp-medium]="omp deepseek-v4-pro:0813"
-    [omp-high]="omp glm-5.2:cloud"
-    [devin-low]="devin swe-1.6-fast"
-    [devin-medium]="devin swe-1.7-lightning"
-    [devin-high]="devin opus"
-    [devin-high-glm]="devin glm-5.2"
+    [omp-high]="omp glm-5.3"
+    [devin-low]="devin gpt-6-luna"
+    [devin-medium]="devin swe-2"
+    [devin-high]="devin gpt-6-sol"
+    [devin-high-glm]="devin glm-5.3"
 )
 
 # ---------------------------------------------------------------------------
-# Fallback lists — literal translation of [fallback.default.*]. Order is
-# preserved: model_index (.gubia/state.env) indexes into these lists.
+# Fallback lists — one per effort level. Order is preserved:
+# model_index (.gubia/state.env) indexes into these lists.
 # ---------------------------------------------------------------------------
 
 # shellcheck disable=SC2034
 declare -ra GUBIA_FALLBACK_LOW=(
-    omp-low
-    codex-low
     devin-low
+    omp-low
 )
 
 # shellcheck disable=SC2034
 declare -ra GUBIA_FALLBACK_MEDIUM=(
-    codex-medium
     omp-medium
     claude-medium
     devin-medium
@@ -65,31 +61,32 @@ declare -ra GUBIA_FALLBACK_MEDIUM=(
 
 # shellcheck disable=SC2034
 declare -ra GUBIA_FALLBACK_HIGH=(
-    omp-high
     claude-high
+    omp-high
     devin-high
     devin-high-glm
 )
 
-# Valid effort levels, in the order of [effort].sequence.
+# Valid effort levels, in the order the engine steps through them.
 # shellcheck disable=SC2034
 declare -ra GUBIA_EFFORT_SEQUENCE=(low medium high)
 
 # ---------------------------------------------------------------------------
-# Per-agent functions — literal translation of the [agents.*] entries.
+# Per-agent functions.
 #
 # Common contract (consumed by the engine, task 05/06): each function
-# receives the concrete values that replace the agents.toml placeholders
-# and fills, in the caller's scope:
+# receives the concrete values for that invocation and fills, in the
+# caller's scope:
 #
 #   GUBIA_ARGV          array with the full argv, command included.
 #   GUBIA_ENV           array of KEY=VALUE pairs (empty if env = []).
 #   GUBIA_PROMPT_MODE   "stdin" or "file": how the prompt enters the CLI.
 #   GUBIA_OUTPUT_MODE   "stdout" or "file": where the output to capture ends up.
 #
-# The TOML's `when`/`unset_when_skipped` conditional logic becomes an
-# `if` inside the function: that's what drove this to be bash rather
-# than plain env (see `catalogo-agentes.md`).
+# Conditional bits (when a flag/env var only applies for some
+# effort/thinking combos) become an `if` inside the function: that's
+# what drove this to be bash rather than plain env (see
+# `vault/spec/catalog.md`).
 # ---------------------------------------------------------------------------
 
 # codex — prompt via stdin, output to a file ({console_output}), effort
@@ -113,8 +110,7 @@ agent_codex() {
     -o "$console_output"
     -c "model_reasoning_effort=\"$effort\""
   )
-  # {no_thinking_codex}: only when thinking=false (when true, it expands
-  # to nothing — two entries with the same name in the TOML).
+  # Only added when thinking=false; left out entirely when true.
   if [[ "$thinking" == "false" ]]; then
     GUBIA_ARGV+=(
       -c 'model_reasoning_summary="none"'
@@ -127,9 +123,9 @@ agent_codex() {
 }
 
 # claude — prompt via stdin, output to stdout, effort wired two ways: the
-# `--effort` flag in argv and the CLAUDE_CODE_EFFORT_LEVEL env var (both
-# wire {effort}, as in the TOML). CLAUDE_CODE_DISABLE_THINKING is only
-# exported when thinking=false; with true it's left unset (unset_when_skipped).
+# `--effort` flag in argv and the CLAUDE_CODE_EFFORT_LEVEL env var.
+# CLAUDE_CODE_DISABLE_THINKING is only exported when thinking=false; with
+# true it's left unset.
 agent_claude() {
   if (( $# != 3 )); then
     printf 'agent_claude: usage: agent_claude <model> <effort> <thinking>\n' >&2
@@ -154,12 +150,10 @@ agent_claude() {
   fi
 }
 
-# omp — prompt via file ({prompt_file}), output to stdout, effort via
-# `--thinking` (wires {effort}, as in the TOML). Bypass with
-# --approval-mode=yolo plus --no-session (CLI literals). When
-# thinking=false, the {no_thinking_omp} placeholder appends `--thinking off`
-# afterwards (two --thinking flags: the second one wins); with true it
-# expands to nothing.
+# omp — prompt via file, output to stdout, effort via `--thinking`.
+# Bypass with --approval-mode=yolo plus --no-session (CLI literals). When
+# thinking=false, a second `--thinking off` is appended afterwards (two
+# --thinking flags: the second one wins); with true nothing is appended.
 agent_omp() {
   if (( $# != 4 )); then
     printf 'agent_omp: usage: agent_omp <model> <effort> <thinking> <prompt_file>\n' >&2
@@ -173,11 +167,10 @@ agent_omp() {
     omp
     --approval-mode=yolo
     --no-session
-    --model "ollama/$model"
+    --model "ollama-cloud/$model"
     --thinking "$effort"
   )
-  # {no_thinking_omp}: only when thinking=false (when true, it expands
-  # to nothing — two entries with the same name in the TOML).
+  # Only appended when thinking=false; left out entirely when true.
   if [[ "$thinking" == "false" ]]; then
     GUBIA_ARGV+=(--thinking off)
   fi
@@ -186,11 +179,10 @@ agent_omp() {
   GUBIA_ENV=()
 }
 
-# devin — prompt via file ({prompt_file}), output to stdout. The CLI
-# doesn't expose an effort flag or env var (only interactive Alt+T, which
-# doesn't apply to -p), so it doesn't wire {effort} or a thinking toggle,
-# unlike codex/claude/omp (literal comment from the TOML). Bypass with
-# --permission-mode dangerous (CLI literal).
+# devin — prompt via file, output to stdout. The CLI doesn't expose an
+# effort flag or env var (only interactive Alt+T, which doesn't apply to
+# -p), so it doesn't wire an effort or thinking toggle, unlike
+# codex/claude/omp. Bypass with --permission-mode dangerous (CLI literal).
 agent_devin() {
   if (( $# != 2 )); then
     printf 'agent_devin: usage: agent_devin <model> <prompt_file>\n' >&2
@@ -223,7 +215,8 @@ agent_devin() {
 #
 # - Transport via stdin (GUBIA_PROMPT_MODE='stdin'): the composed
 #   prompt (`run_contract_header` + `cat <plan>`, the literal
-#   composition from `motor-contrato.md`) comes in through its stdin.
+#   composition from `vault/spec/engine.md` § "Contract injected per
+#   iteration") comes in through its stdin.
 # - Output to stdout (GUBIA_OUTPUT_MODE='stdout').
 # - No argv or env of its own (single-element GUBIA_ARGV, empty
 #   GUBIA_ENV): the binary takes no options.

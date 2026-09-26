@@ -1902,11 +1902,10 @@ config_scalar_bad() {
 #   `state_guard_model_index` (a stale index after an interrupted
 #   `effort set` self-corrects by going back to 0), and failing it in
 #   the preflight would punish the user for an engine bug.
-# - `fallback_list`: `default`. The v1 catalog translates a single
-#   set of fallback lists (`[fallback.default.*]` from `agents.toml`
-#   → `GUBIA_FALLBACK_LOW/MEDIUM/HIGH`), so any other name is a set
-#   that doesn't exist and that the engine would silently ignore,
-#   running with `default` anyway.
+# - `fallback_list`: `default`. The catalog only defines a single set
+#   of fallback lists (`GUBIA_FALLBACK_LOW/MEDIUM/HIGH`), so any other
+#   name is a set that doesn't exist and that the engine would
+#   silently ignore, running with `default` anyway.
 # - `memory_max`: whatever `MemoryMax=` from systemd accepts, since
 #   that's who consumes the value (`invoke_prepare`): an integer with
 #   an optional `K|M|G|T` suffix, a percentage, or `infinity`. A

@@ -2,7 +2,7 @@
 
 # Test of agent_omp (plan/03.md): checks that the function wires up
 # {prompt_file} transport (GUBIA_PROMPT_MODE) and stdout output
-# (GUBIA_OUTPUT_MODE), as preserved by the agents.toml translation.
+# (GUBIA_OUTPUT_MODE).
 
 AGENTS_SH="${BATS_TEST_DIRNAME}/../config/agents.sh"
 

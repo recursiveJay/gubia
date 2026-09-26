@@ -2,9 +2,8 @@
 
 Spec of the engine's global agent catalog, written against the live code
 of `config/agents.sh` (275 lines) and its consumption in `gubia`. It
-replaces the historical v1 reference, which described the catalog as a
-parsed `agents.toml` and omitted `agent_probe`; here every fact is
-anchored to the live file.
+replaces the historical v1 reference, which omitted `agent_probe`; here
+every fact is anchored to the live file.
 
 ## What it is
 

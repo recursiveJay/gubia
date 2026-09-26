@@ -25,7 +25,7 @@ setup() {
 # here: the BASH_SOURCE guard prevents `main` from running.
 
 @test "model_index out of range of the active list returns to 0 with a stderr warning and without aborting" {
-  # List of length 3 (low level in agents.toml), index 4: out.
+  # List of length 3 (GUBIA_FALLBACK_LOW), index 4: out.
   model_index=4
   state_guard_model_index 3
   # Without aborting: reaching here already proves there was no exit 2.
@@ -33,7 +33,7 @@ setup() {
 }
 
 @test "model_index within range is preserved" {
-  # List of length 4 (medium/high level in agents.toml).
+  # List of length 4 (GUBIA_FALLBACK_MEDIUM/HIGH).
   model_index=3
   state_guard_model_index 4
   [ "$model_index" -eq 3 ]
