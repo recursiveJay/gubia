@@ -1,6 +1,6 @@
 ---
 name: minimal-fixture-repo-and-engine-test-patterns
-description: "tests/fixtures/repo-minimal/ is the versioned fixture for gubia engine e2e tests (minimal plan + scripted fake CLI), with its usage pattern and the additional pattern for testing signal escalation on process-group shutdown."
+description: "tests/fixtures/repo-minimal/ is the versioned fixture for gubia engine e2e tests (minimal plan + scripted fake CLI), with its usage pattern, the pattern for testing signal escalation on process-group shutdown, and the scripted exit-code queue for forcing fallback exhaustion."
 type: methodology
 ---
 
@@ -80,3 +80,40 @@ does `trap '' TERM` in the grandchild process and then sleeps; the test
 checks that, after `invoke_agent`, no process of the original PGID is still
 alive. This pattern is reusable for any future test that verifies
 process-group management in `gubia`.
+
+## Forcing fallback exhaustion with a scripted exit-code queue
+
+To e2e-test the streak sentinel — circular `model_index` rotation and its
+`fallback-exhausted` abort (exit 3) — `tests/gubia_rotation_fallback_exhausted.bats`
+does not use the versioned `repo-minimal` fixture: it builds a **scripted
+exit-code queue** inline in `setup()` (`:23-71`). The pattern:
+
+1. A `rotate-cli` in the test's `PATH` consumes, invocation by invocation, a
+   file of exit codes scripted in advance (`exit_queue.txt`). It reads the
+   Nth line on the Nth invocation using an external sequence counter
+   (`seq_state.txt`), so the same CLI deterministically fails or succeeds per
+   turn without interpreting the prompt (`:28-37`).
+2. Each invocation appends the `$model_index` it was invoked with to a
+   `marker.txt` witness (`:35`, `markers()` helper at `:25-27`). This is what
+   asserts the *rotation wrap* from outside the process: e.g. `0\n1\n2\n`
+   proves the 3-model list was walked once and wrapped back to the marked
+   index.
+3. The test catalog's `agent_probe` reads `$model_index` directly (a bash
+   function sourced in the same process as `gubia run`, not a separate
+   binary) and forwards it into the fake CLI's environment (`:41-59`), so the
+   marker records exactly the value `run_reload_state` re-read for that
+   iteration.
+4. The fallback list is 3 models under one level; **only the length counts**,
+   the entry content is irrelevant (`:43-49`).
+5. To force exhaustion: an `exit_queue.txt` of all `1`s (`1\n1\n1\n1\n1\n`)
+   fails every model with no success in between, so the sentinel aborts at
+   exit 3 after exactly 3 real invocations (`:95-108`). A mixed queue
+   (`1\n1\n0\n1\n1\n0\n`) instead exercises the reset-and-wrap path and a
+   clean exit 0 (`:82-93`).
+6. Assert `stop.md` is **born from this run**: guard `[ ! -e "$repo/plan/stop.md" ]`
+   before `gubia run`, then assert its presence and exact content after, and
+   keep `[ "$status" -eq 3 ]` unchanged (`:97-102`).
+
+This complements the plan-draining `repo-minimal` fixture: that one drains a
+real 3-subtask plan and counts turns; this one scripts exit codes to reach a
+specific sentinel branch deterministically.
