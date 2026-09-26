@@ -817,6 +817,8 @@ run_streak_check() {
   ((index == state_streak_index)) || return 0
   printf 'gubia: run: fallback-exhausted: rotation has returned to model_index=%d of the first failure with no successful iteration in between (effort_level=%s, fallback_list=%s): every model in the level has failed\n' \
     "$index" "${effort_level:-?}" "${fallback_list:-?}" >&2
+  printf '%s\n' "Engine stopped: fallback exhaustion — every model in the effort level's fallback list failed with no successful iteration in between. This is an engine stop, not an agent- or judge-driven stop." \
+    >"$(dirname -- "$run_plan_abs")/stop.md"
   exit 3
 }
 
