@@ -166,7 +166,12 @@ one, back to `0`. The decision is made by `run_decide_rotation`
 
 **Streak sentinel** (`gubia:736`): the `model_index` of the first failure
 is saved; if it's reached again without any successful iteration in
-between, it aborts with `fallback-exhausted` (exit 3). Any successful
+between, it aborts with `fallback-exhausted` (exit 3). Before exiting, it
+writes a `stop.md` next to the plan (`dirname "$run_plan_abs"/stop.md`)
+with a predefined, in-English message identifying the stop as an
+**engine stop** (fallback exhaustion) — distinct from the agent-written
+stop (agent finished all tasks) and the judge-written stop (judge's 10th
+rejection / Case C), which use their own messages. Any successful
 iteration resets the sentinel, so a long run can cycle through indefinitely
 — the real regeneration happens between successes. The sentinel is memory
 of the `run` process: an engine that restarts begins with no streak.
@@ -185,7 +190,7 @@ engine.
 | 0 | Normal exit: stop file present or iteration cap exhausted |
 | 1 | `flock` contention: another loop is already running on the plan |
 | 2 | Invalid configuration or usage (corrupt `state.env`, broken catalog, non-executable CLI, malformed arguments) |
-| 3 | `fallback-exhausted`: rotation came back to the first failure with no success in between |
+| 3 | `fallback-exhausted`: rotation came back to the first failure with no success in between; also leaves a `stop.md` (engine-written) next to the plan identifying the engine stop |
 | 130 | Interrupted by SIGINT |
 
 rc 126/127 (non-executable / not-found CLI) are an immediate `die` with
