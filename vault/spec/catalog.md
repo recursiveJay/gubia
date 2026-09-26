@@ -177,7 +177,11 @@ codex instead receives the output destination.
   It's not a catalog oversight: the function deliberately receives fewer
   arguments than the others.
 - **Thinking**: no toggle, for the same reason.
-- **Bypass**: `--permission-mode dangerous`.
+- **Bypass**: `--permission-mode dangerous`
+  `--respect-workspace-trust false`. The workspace-trust flag is the
+  part that actually gates folder trust; `--permission-mode dangerous`
+  alone does **not** cover it (see `installation.md`'s folder-trust
+  rule).
 - **Env**: empty.
 
 ## `agent_probe` (`config/agents.sh:240`)
