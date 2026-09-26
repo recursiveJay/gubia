@@ -1,26 +1,33 @@
 ---
 name: reading-gubia-iteration-logs
-description: "How to correctly interpret a .gubia/logs/ iteration set: retention is ordered by mtime (never the numeric <iter> prefix, which restarts each relaunch and collides across runs), an empty .out is not by itself a failure, and any <iter>.* citation rots once loop_max_logs further iterations have run."
+description: "How to correctly interpret a .gubia/logs/ iteration set: retention is ordered by mtime (never the numeric <iter> prefix, which is a monotonic sequence number inferred at startup), an empty .out is not by itself a failure, and any <iter>.* citation is pruned once loop_max_logs further iterations have run."
 type: pitfall
 ---
 
 Four facets of the same concern — reading a `.gubia/logs/` iteration set
 without misdiagnosing it:
 
-## Retention is ordered by mtime, never the numeric `<iter>` prefix
+## Retention is ordered by mtime; the numeric prefix is now monotonic
 
 `.gubia/logs/` rotation keeps iteration sets ordered by modification time,
-never by the numeric `<iter>` prefix. The prefix is local to each
-`cmd_run` invocation (`gubia:1636`) and restarts at 1 on every relaunch,
-so a `10.prompt` from an earlier run is older than a `1.prompt` from a
-later run: numeric sorting would keep the wrong files across relaunches
-(PRD R2). The always-written `<iter>.prompt` is the mtime anchor for a
-set, because `run_prompt` writes it unconditionally every iteration
-(`gubia:1110-1112`).
+never by the numeric `<iter>` prefix. The prefix is a monotonic log
+sequence number: `run_infer_log_seq` (`gubia:1561`) sets it to the
+highest strictly-numeric `.prompt` prefix on disk (or `0` when none
+exist), and the loop pre-increments it before each iteration, so a
+relaunch continues where the previous run stopped instead of restarting
+at 1. Numeric-prefix ordering is therefore safe across relaunches now,
+and a `1.prompt` is never written twice over the same plan.
+
+mtime remains the retention anchor only as a defensive fallback: it does
+not depend on how the prefix was assigned, so logs left by an engine
+that restarted the prefix at 1 on every relaunch, or a hand-copied set,
+still prune oldest-first (PRD R2). The always-written `<iter>.prompt` is
+the mtime anchor for a set, because `invoke_prepare` writes it
+unconditionally every iteration (`gubia:1110-1112`).
 
 Do not re-introduce numeric-prefix ordering in any future log-retention or
-ordering change; the cross-run collision is the observable symptom (older
-run's high prefix outranking the newer run's low prefix).
+ordering change; mtime ordering is the one behaviour that holds across
+every prefix-assignment history, including logs this engine did not write.
 
 ## Retention is a hard horizon: a cited `<iter>.*` expires
 
@@ -36,11 +43,11 @@ Consequence, which bites the knowledge corpus itself: any citation of the
 form `.gubia/logs/<iter>.out` written into a committed `vault/knowledge/`
 entry or a task file is a **short-lived** anchor. It expires once
 `loop_max_logs` further iterations have run — within the same plan, not
-only across relaunches — and then resolves to whatever unrelated iteration
-later reused that number (the prefix collision above), or to nothing at
-all. Observable symptom: a `[scribe]`/`[judge]` scout re-reading a
-knowledge entry's `file:line` evidence finds a different incident at that
-path, or a missing file.
+only across relaunches — and then resolves to nothing at all, because the
+monotonic sequence number is never reused. Observable symptom: a
+`[scribe]`/`[judge]` scout re-reading a knowledge entry's `file:line`
+evidence finds a missing file (the pruned path), never a different incident
+at the same number.
 
 Preventive rule: when distilling evidence into permanent knowledge, anchor
 on things that do not rotate — the task file and its line, a commit hash, a
