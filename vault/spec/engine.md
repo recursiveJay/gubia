@@ -199,7 +199,9 @@ user's Ctrl-C.
 ## Process management
 
 `setsid` + closed stdin (or prompt file) + stdout/stderr to separate files
-under `.gubia/logs/<iter>.{prompt,out,err}` (`gubia:1411` `invoke_agent`).
+under `.gubia/logs/<log_seq>.{prompt,out,err,console}` (`gubia:1417`
+`invoke_agent`), where `<log_seq>` is the monotonic log sequence number
+described under "Log rotation".
 On finishing (or aborting), the **process group** is killed, not the
 process (`gubia:1211` `invoke_kill_group`): the agent's CLI spawns
 subprocesses (MCP servers, `git`) that outlive the parent and would keep
@@ -250,23 +252,39 @@ engine blocked waiting on it).
 | Path | What it is | Scope |
 |---|---|---|
 | `.gubia/state.env` | mutable local state (6 keys) | per repo |
-| `.gubia/logs/` | prompt, stdout and stderr per iteration (`<iter>.{prompt,out,err,console}`) | per repo |
+| `.gubia/logs/` | prompt, stdout and stderr per iteration (`<log_seq>.{prompt,out,err,console}`) | per repo |
 | `.gubia/<slug>.lock` | `flock` lockfile | per plan |
 
 ### Log rotation (`loop_max_logs`)
 
 After each iteration's files are written, the engine prunes
 `.gubia/logs/` to the `loop_max_logs` most-recent iteration log sets
-(`gubia:1563` `run_prune_logs`, called post-write in the loop at
-`gubia:1739` `run_prune_logs || true`). The retention unit is the
-**iteration set** — every file sharing one numeric `<iter>` prefix across
+(`gubia:1598` `run_prune_logs`, called post-write in the loop at
+`gubia:1782` `run_prune_logs || true`). The retention unit is the
+**iteration set** — every file sharing one numeric `<log_seq>` prefix across
 the `.prompt`, `.out`, `.err`, and `.console` suffixes — and it is treated
 atomically: every suffix of a pruned set is deleted, never a subset (R1).
+
+The `<log_seq>` prefix is a **monotonic sequence number**, not the
+per-invocation iteration counter: `run_infer_log_seq` (`gubia:1561`)
+sets `run_log_seq` to the highest strictly-numeric prefix among
+`.gubia/logs/*.prompt` (or `0` when none exist) at the start of each
+`gubia run`, and the loop pre-increments it before every iteration
+(`run_log_seq=$((run_log_seq + 1))`). The result is that a relaunch
+continues where the previous run stopped (`1.*`, `2.*`, …) instead of
+colliding with it. The sequence is **inferred from disk, never
+persisted**: `state.env` stays the 6 scalars of "Local state" with no
+new key. `.prompt` is the anchor because `invoke_prepare` writes it
+unconditionally on every iteration, same as `run_prune_logs`.
+
 Ordering is by **modification time** of each set's `.prompt` anchor, not
-by numeric prefix, because `<iter>` restarts at `1` on every relaunch and
-collides across runs (R2); `.prompt` is written unconditionally every
-iteration (`invoke_prepare`), so it is the reliable mtime anchor. Only the
-four known suffixes are ever touched; unrelated files (`.gitkeep`, future
+by numeric prefix (R2). For logs this engine writes the two orders agree
+(the prefix is monotonic), but mtime stays the anchor because it doesn't
+depend on how the prefix was assigned — logs left by an older engine that
+restarted the prefix at `1`, or a hand-copied set, still prune
+oldest-first. `.prompt` is written unconditionally every iteration
+(`invoke_prepare`), so it is the reliable mtime anchor. Only the four
+known suffixes are ever touched; unrelated files (`.gitkeep`, future
 engine files) are left alone (R5).
 
 Pruning is **non-abortive** (R6): it is maintenance, never an iteration
