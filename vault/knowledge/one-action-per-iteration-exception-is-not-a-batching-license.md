@@ -18,7 +18,19 @@ had explicitly invoked the one-action rule to stop at a single subtask
 (`.gubia/logs/33.out:3`). Iteration-boundary confusion of the same shape
 recurred in task 03 (`.gubia/logs/32.out`).
 
-Guidance: one iteration = one real subtask. Batch only `[x]` marks for
-already-completed work, never fresh edits; if a run of subtasks is genuinely
-trivial and atomic, split or order them so each iteration carries one
-verifiable unit and its own `SUBTASK_COMPLETED=true`.
+A related failure is the **forward edit**: doing a *later* subtask's edit in
+an earlier iteration but deliberately leaving it unmarked ("I'll let the next
+iteration pick it up"), so the later subtask then resolves via the
+"already done" skip with evidence that reads `already present`. Task 02's
+catalog.md edit was applied in the `effort` iteration
+(`.gubia/logs/11.out:3`) and only claimed two iterations later as
+`already present` (`plan/task/02.md:41`). The edit was real work done out of
+order, not pre-existing state — so the skip exception did not genuinely
+apply to it.
+
+Guidance: one iteration = one real subtask, done in order. Batch only `[x]`
+marks for already-completed work, never fresh edits; if a run of subtasks is
+genuinely trivial and atomic, split or order them so each iteration carries
+one verifiable unit and its own `SUBTASK_COMPLETED=true`. Do not perform a
+future subtask's edit early and leave it unmarked: claim it immediately (and
+stop), or leave it untouched for its own iteration.
