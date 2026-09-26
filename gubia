@@ -920,17 +920,19 @@ run_resolve_agent() {
 # runs the next round. `agent_probe` remains available for catalog
 # testing, but it isn't the loop's default.
 #
-# The iteration number arrives as an argument: it's the prefix of the
-# `.gubia/logs/` files (`<iter>.prompt`, `.out`, `.err`), so each round
-# of the loop writes its own and doesn't overwrite the previous
+# The log sequence number arrives as an argument: it's the prefix of
+# the `.gubia/logs/` files (`<log_seq>.prompt`, `.out`, `.err`,
+# `.console`). It's monotonic across relaunches (`run_infer_log_seq`),
+# not the per-invocation `iter`, so each round — of this run or any
+# earlier one — writes its own set and never overwrites a previous
 # observation.
 run_invoke_iteration() {
-  local iter="$1" rc=0
+  local log_seq="$1" rc=0
   run_resolve_agent "$effort_level" "$model_index"
-  invoke_agent "$run_resolved_agent_fn" "$run_resolved_model" "$effort_level" "$thinking" "$iter" || rc=$?
+  invoke_agent "$run_resolved_agent_fn" "$run_resolved_model" "$effort_level" "$thinking" "$log_seq" || rc=$?
   if [[ -n "$invoke_interrupted" ]]; then
     printf 'gubia: run: interrupted by signal during iteration %s: stopping without interpreting the agent exit code (%d) or rotating models\n' \
-      "$iter" "$rc" >&2
+      "$log_seq" "$rc" >&2
     exit 130
   fi
   run_iteration_rc="$rc"
@@ -1103,7 +1105,7 @@ invoke_prefix=()
 #   is the observation the later layers consume just like the other
 #   agents' stdout.
 invoke_prepare() {
-  local agent_fn="$1" model="$2" effort="$3" thinking="$4" iter="$5"
+  local agent_fn="$1" model="$2" effort="$3" thinking="$4" log_seq="$5"
   local prompt_file
 
   # The two files that some catalog functions receive as arguments must
@@ -1111,11 +1113,11 @@ invoke_prepare() {
   # building their argv. The prompt can't just be appended at the end of
   # GUBIA_ARGV: omp and devin wire it in with their own flags, and codex
   # instead receives the destination of its console output.
-  prompt_file="${run_root}/.gubia/logs/${iter}.prompt"
-  invoke_console_output_path="${run_root}/.gubia/logs/${iter}.console"
+  prompt_file="${run_root}/.gubia/logs/${log_seq}.prompt"
+  invoke_console_output_path="${run_root}/.gubia/logs/${log_seq}.console"
   run_prompt "$run_plan_abs" >"$prompt_file"
-  invoke_stdout_path="${run_root}/.gubia/logs/${iter}.out"
-  invoke_stderr_path="${run_root}/.gubia/logs/${iter}.err"
+  invoke_stdout_path="${run_root}/.gubia/logs/${log_seq}.out"
+  invoke_stderr_path="${run_root}/.gubia/logs/${log_seq}.err"
 
   # The signatures are deliberately the catalog's, not an artificial
   # engine interface. Test agents and local catalogs keep the historical
@@ -1413,8 +1415,8 @@ invoke_install_traps() {
 # 'stdin' mode — the agent's fd 0 belongs to the agent, never to the
 # engine.
 invoke_agent() {
-  local agent_fn="$1" model="$2" effort="$3" thinking="$4" iter="$5" pid rc
-  invoke_prepare "$agent_fn" "$model" "$effort" "$thinking" "$iter"
+  local agent_fn="$1" model="$2" effort="$3" thinking="$4" log_seq="$5" pid rc
+  invoke_prepare "$agent_fn" "$model" "$effort" "$thinking" "$log_seq"
   (
     # Catalog `env`: KEY=VALUE pairs exported HERE, inside the launch
     # job — the child inherits them and the `run` process's environment
@@ -1434,7 +1436,7 @@ invoke_agent() {
     fi
     if [[ "$GUBIA_PROMPT_MODE" == 'stdin' ]]; then
       exec setsid ${invoke_prefix+"${invoke_prefix[@]}"} -- "${GUBIA_ARGV[@]}" \
-        <"${run_root}/.gubia/logs/${iter}.prompt" \
+        <"${run_root}/.gubia/logs/${log_seq}.prompt" \
         >"$invoke_stdout_path" 2>"$invoke_stderr_path"
     else
       exec setsid ${invoke_prefix+"${invoke_prefix[@]}"} -- "${GUBIA_ARGV[@]}" \
@@ -1543,17 +1545,46 @@ run_resolve_max_iterations() {
   run_max_iterations="$raw"
 }
 
+# Infers the log sequence number for this `cmd_run` invocation: sets
+# `run_log_seq` to the highest strictly-numeric prefix among
+# `.gubia/logs/*.prompt`, or 0 when none exist. The loop pre-increments
+# it, so the first set this run writes is highest+1 and a relaunch
+# continues where the previous run stopped instead of colliding with
+# its `1.*`, `2.*`, … (`vault/TODO.md`, item 2, fix a).
+#
+# Inferred from disk, never persisted: `state.env` stays the 6 scalars
+# of `vault/spec/engine.md` ("Local state"). `.prompt` is the anchor
+# because `invoke_prepare` writes it unconditionally on every
+# iteration, same as `run_prune_logs`. `10#` forces base 10 so a
+# hand-made `010.prompt` isn't read as octal. Requires a resolved
+# `run_root`.
+run_infer_log_seq() {
+  local f name prefix
+  run_log_seq=0
+  for f in "${run_root}/.gubia/logs"/*.prompt; do
+    [[ -f "$f" ]] || continue
+    name="${f##*/}"
+    prefix="${name%.prompt}"
+    [[ "$prefix" =~ ^[0-9]+$ ]] || continue
+    if (( 10#$prefix > run_log_seq )); then
+      run_log_seq=$((10#$prefix))
+    fi
+  done
+}
+
 # Prunes `.gubia/logs/` to the `loop_max_logs` most-recent iteration
 # log sets, ordered by modification time of each set's `.prompt`
 # anchor (`plan/log-rotation-prd.md`, R1-R5). An "iteration set" is
-# every file sharing one numeric `<iter>` prefix across `.prompt`,
+# every file sharing one numeric `<log_seq>` prefix across `.prompt`,
 # `.out`, `.err`, and `.console`; rotation treats it atomically —
 # deleting every suffix of a pruned set, never a subset (R1).
 #
-# Ordering is by mtime, NOT by numeric prefix: `iter` is local to each
-# `cmd_run` invocation and restarts at 1 on every relaunch
-# (`vault/spec/engine.md`), so a `10.prompt` from an earlier run is
-# older than a `1.prompt` from a later one (R2). `<iter>.prompt` is
+# Ordering is by mtime, NOT by numeric prefix (R2). The prefix is the
+# monotonic log sequence number (`run_infer_log_seq`), so for logs this
+# engine writes both orders agree; mtime stays the anchor because it
+# doesn't depend on how the prefix was assigned — logs left by an
+# engine that restarted the prefix at 1 on every relaunch, or a
+# hand-copied set, still prune oldest-first. `<log_seq>.prompt` is
 # written unconditionally on every iteration (`invoke_prepare`), so it
 # is the reliable mtime anchor for a set.
 #
@@ -1680,13 +1711,17 @@ cmd_run() {
   # Explicit mkdir: invoke_agent redirects there, and the lock's
   # `exec 9>` only created a bare `.gubia/`.
   mkdir -p -- "${run_root}/.gubia/logs"
+  # Log sequence number, continuing from the highest existing prefix
+  # so a relaunch never reuses a previous run's filenames. Separate
+  # from `iter` below, which still restarts at 1 per invocation.
+  local run_log_seq
+  run_infer_log_seq
   # Iteration counter (`vault/spec/engine.md`, "Command-line
-  # interface"). Starts at 1, not 0, because it isn't just a counter:
-  # it's the prefix of each round's log files
-  # (`.gubia/logs/<iter>.prompt|.out|.err`), and "iteration 1" is how
-  # the first one is named when diagnosing. The condition is `<=`
-  # against that same number, so `max_iterations=N` invokes the agent
-  # exactly N times.
+  # interface"). Starts at 1, not 0: "iteration 1" is how the first one
+  # is named when diagnosing, and the condition is `<=` against that
+  # same number, so `max_iterations=N` invokes the agent exactly N
+  # times. It is NOT the prefix of the log files: those are named by
+  # `run_log_seq` (above), which continues across relaunches.
   #
   # The counter is local to the process and not persisted in
   # `state.env`: the ceiling bounds ONE invocation of `gubia run`, not
@@ -1731,8 +1766,12 @@ cmd_run() {
     # `run_invoke_iteration`, which leaves the rc in
     # `run_iteration_rc` and stops with exit 130 if the iteration was
     # interrupted by a signal — without interpreting that rc or
-    # rotating.
-    run_invoke_iteration "$iter"
+    # rotating. It's given the log sequence number, not `iter`: that is
+    # what names this round's log files, and it's bumped here — after
+    # the stop-file check — so only a round that really invokes the
+    # agent consumes a number.
+    run_log_seq=$((run_log_seq + 1))
+    run_invoke_iteration "$run_log_seq"
     # Prune `.gubia/logs/` to the `loop_max_logs` most-recent sets,
     # post-write (R4) so `loop_max_logs=1` keeps exactly the current
     # set. Non-abortive (R6): maintenance, never an iteration result —
