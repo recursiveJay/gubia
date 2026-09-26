@@ -3,7 +3,7 @@
 #
 # `just lint` uses `find -name '*.sh'`, which doesn't pick up `gubia`
 # (no .sh extension). This script covers the gap documented in
-# `vault/knowledge/just-lint-does-not-cover-gubia.md`: it runs `just
+# `vault/knowledge/verification-gates-need-the-repo-specific-invocation.md`: it runs `just
 # lint` and also `shellcheck -x gubia` explicitly, and exits with a
 # non-zero code if either one fails.
 set -euo pipefail

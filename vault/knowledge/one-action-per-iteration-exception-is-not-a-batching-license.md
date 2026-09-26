@@ -34,3 +34,11 @@ genuinely trivial and atomic, split or order them so each iteration carries
 one verifiable unit and its own `SUBTASK_COMPLETED=true`. Do not perform a
 future subtask's edit early and leave it unmarked: claim it immediately (and
 stop), or leave it untouched for its own iteration.
+
+Recurred in task 01 of the stop.md plan: iteration `.gubia/logs/7.out`
+completed BOTH the `[effort medium]` capability fix AND the implementation
+subtask (writing the `stop.md` message in `run_streak_check`) in one
+iteration, self-noting "Stopping here per single-action rule" only after
+doing both. Same violation shape as task 04's translation run — two real
+subtasks in one pass because each looked trivial — not the skip exception
+(neither was pre-existing work).
