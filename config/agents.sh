@@ -204,6 +204,8 @@ agent_devin() {
     devin
     --permission-mode
     dangerous
+    --respect-workspace-trust
+    false
     --model "$model"
     --prompt-file "$prompt_file"
     -p

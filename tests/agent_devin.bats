@@ -30,4 +30,14 @@ setup() {
   for arg in "${GUBIA_ARGV[@]}"; do
     [ "$arg" != "-o" ]
   done
+
+  # Workspace-trust gate is skipped for non-interactive -p runs:
+  # `--respect-workspace-trust false` (value immediately follows the flag).
+  found_trust_flag=0
+  for i in "${!GUBIA_ARGV[@]}"; do
+    if [ "${GUBIA_ARGV[$i]}" = "--respect-workspace-trust" ] && [ "${GUBIA_ARGV[$((i + 1))]}" = "false" ]; then
+      found_trust_flag=1
+    fi
+  done
+  [ "$found_trust_flag" -eq 1 ]
 }
