@@ -31,6 +31,26 @@ Each harness uses one directory per skill with `SKILL.md` inside, overwritable b
 
 The layout resolution used by `config validate` (`config_harness_skills_dir` in `gubia`) matches this table: the catalog's four harnesses are the only ones with a known layout. A catalog agent that isn't one of those four is not a harness the sync knows how to install into.
 
+## Folder trust
+
+Some catalog harnesses gate non-interactive runs on per-directory trust, so a `-p` run from a directory the harness has never seen fails or hangs before doing any work. The catalog's harnesses differ:
+
+- `claude` — no gate: `-p` disables trust verification by design.
+- `omp` — no gate: Oh My Pi never adopted upstream pi's trust check.
+- `devin` — gate exists, fix in argv: `agent_devin` passes `--respect-workspace-trust false`.
+- `codex` — gate exists, no bypass flag: since ~v0.113 the trust prompt appears even with `--dangerously-bypass-approvals-and-sandbox`. Trust is per-path in `~/.codex/config.toml`, and there is no argv flag that covers it — the user must pre-trust the project directory before a `-p` run is trusted.
+
+### Codex pre-trust step
+
+`codex` has no flag that bypasses folder trust, so pre-trusting is a user step, not an automated recipe. Before running the loop under `codex` from a project directory, the user must mark that path trusted in `~/.codex/config.toml`:
+
+```toml
+[projects."/path/to/project"]
+trust_level = "trusted"
+```
+
+The path must match the directory `codex` runs from exactly. The user can do this interactively (answer the trust prompt once) or edit the file by hand. A `-c 'projects."…".trust_level="trusted"'` argv override is unverified and must not be relied on.
+
 ## Detection
 
 `sync-skills` detects which harnesses are present on the machine with `command -v <binary>` on the PATH. If a binary is not found, the harness is skipped with a message ("skipped: \<harness\> is not present on this machine") and the rest continue. Missing harnesses are not an error: the sync installs only where it can.
@@ -47,6 +67,7 @@ An executable check that turns the contract's availability guarantee into someth
 
 ## Invariants / hard rules
 
+- **Every harness added to the catalog must record its folder-trust behavior** in this spec: whether it gates non-interactive runs on per-directory trust or not, and — if it does — the flag, config, or doc step that covers it (`claude` and `omp` are gate-free; `devin` uses the `--respect-workspace-trust false` argv flag, `codex` the per-path `~/.codex/config.toml` pre-trust step). A new harness must not ship without a trust-behavior entry, in the same checklist slot skills installation already occupies.
 - **The sync copies, it does not translate.** If a harness shows up whose skill format isn't an equivalent file layout, translating it is a project of its own, not an extension of the `justfile`.
 - **The sync and `install-config` never run on their own**: they are not triggered from the loop or from an iteration. The human runs them.
 - **No iteration agent touches `skills/`** or the installed layout. It's the same boundary that protects `config/agents.sh`.
