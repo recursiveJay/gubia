@@ -94,9 +94,12 @@ markers() {
 
 @test "streak sentinel exhaustion: three consecutive failures with no success in between abort with fallback-exhausted" {
   printf '1\n1\n1\n1\n1\n' >exit_queue.txt
+  [ ! -e "$repo/plan/stop.md" ]
   GUBIA_AGENTS_SH="$repo/config/agents.sh" \
     run "$GUBIA_BIN" run plan/plan.md 5
   [ "$status" -eq 3 ]
+  [ -f "$repo/plan/stop.md" ]
+  [ "$(cat "$repo/plan/stop.md")" = "Engine stopped: fallback exhaustion — every model in the effort level's fallback list failed with no successful iteration in between. This is an engine stop, not an agent- or judge-driven stop." ]
   # The streak is marked at index 0 (the first failure); each failure
   # rotates the index BEFORE checking the mark, so the wrap is detected
   # right after completing the 3-model list: 0 fails and rotates to 1,
