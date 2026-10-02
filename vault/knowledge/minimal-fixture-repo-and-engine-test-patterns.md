@@ -1,6 +1,6 @@
 ---
 name: minimal-fixture-repo-and-engine-test-patterns
-description: "tests/fixtures/repo-minimal/ is the versioned fixture for gubia engine e2e tests (minimal plan + scripted fake CLI), with its usage pattern, the pattern for testing signal escalation on process-group shutdown, and the scripted exit-code queue for forcing fallback exhaustion."
+description: "tests/fixtures/repo-minimal/ is the versioned fixture for gubia engine e2e tests (minimal plan + scripted fake CLI), with its usage pattern, the pattern for testing signal escalation on process-group shutdown, the scripted exit-code queue for forcing fallback exhaustion, and the direct-bats tier for standalone helper scripts."
 type: methodology
 ---
 
@@ -117,3 +117,30 @@ exit-code queue** inline in `setup()` (`:23-71`). The pattern:
 This complements the plan-draining `repo-minimal` fixture: that one drains a
 real 3-subtask plan and counts turns; this one scripts exit codes to reach a
 specific sentinel branch deterministically.
+
+## Standalone-script tests (a distinct, direct tier)
+
+Phase-0 helper scripts (`skills/gubia/scripts/effort-plan.sh`,
+`effort-expand-00.sh`) are tested **directly as plain bash**, not through the
+engine: the suite (`tests/gubia_effort_plan.bats`) builds an inline fixture in
+`setup()` (`mktemp -d`, cleaned in `teardown`) and invokes the script by path.
+No `gubia run`, no fake CLI, no turn counting — the script is the unit under
+test.
+
+Three concrete techniques, all reusable for any deterministic
+text-producing script:
+
+1. **Exact output** — pin the whole stdout against a heredoc via
+   `diff - <(printf '%s\n' "$output") <<'EOF' … EOF` (or against a rewritten
+   file with `diff - "$repo/file" <<'EOF' … EOF`). Assert the exact TSV /
+   inserted bullets, never a substring grep.
+2. **Idempotency by byte-identity** — snapshot `cp file before`, run the
+   mutating mode again, then `cmp before file`. Byte-identity is the
+   contract, not "no duplicate lines".
+3. **Abort by exit code + untouched file** — assert `[ "$status" -eq 3 ]`
+   for the abort path, then `cmp` the file against a snapshot taken *after*
+   the precondition was broken but *before* the run, proving "untouched"
+   rather than "changed and reverted".
+
+Only observable behavior is pinned: the exact output lines the spec fixes,
+never the script's internal wording beyond that contract.
