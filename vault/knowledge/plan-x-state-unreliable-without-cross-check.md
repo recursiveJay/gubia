@@ -80,6 +80,31 @@ Evidence: task 01, `.gubia/logs/14.out` — "the checkpoint line had lost its
 checkbox (it read `- [judge] …` instead of `- [ ] [judge] …`). Because of
 that, the loop's 'first - [ ]' search would have skipped it."
 
+## An "idempotent" generator can reset checkbox state and undo drained work
+
+A script that regenerates its own bullets by deleting them in *both*
+checkbox states (`- [ ]` and `- [x]`) and re-emitting them as `- [ ]`
+claims idempotency ("running it twice changes nothing") while actually
+undoing drained progress: re-running it after some of its bullets are
+`[x]` reverts them to unchecked, and the loop re-runs that work.
+
+Symptom: a task-file generator whose idempotency is only verified by
+`diff` on runs where every bullet is still `[ ]` — the test passes while
+the `[x] → [ ]` regression stays invisible.
+
+Rule: a bullet-emitting script must preserve the checkbox state of the
+bullets it already owns (match the full `- [x] …` form and re-emit it
+verbatim), not delete-and-recreate. If its contract only guarantees it
+runs once, verify idempotency against a manifest that already contains
+drained (`[x]`) bullets, not a fresh one.
+
+Evidence: `skills/gubia/scripts/effort-expand-00.sh` (commit `2bcadff`):
+`is_expand_bullet` matches both `- [ ]` and `- [x]` forms, then the loop
+re-emits `- [ ] Interleave effort subtasks …` — so re-running the script
+after any per-file bullet is drained resets it to unchecked. Flagged but
+left unfixed in the judge note of `plan/task/02.md`, because phase 0 runs
+the script exactly once.
+
 ## Common rule
 
 Do not consider a task done until ALL its pending checkpoints are
