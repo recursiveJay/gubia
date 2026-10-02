@@ -28,13 +28,13 @@ planning, cleanup, and commits; a second phase0 pass does not reprocess
 it or reuse it as a product task either.
 
 ## Subtasks
-- [ ] Breakdown — Break the plan file down into task files starting at 01, without reusing or reprocessing task 00. Read the plan and the local knowledge (vault/ or skills) and materialize task files 01..N by direct write, following the structure of `skills/gubia/scaffold_task.md`. Then queue, in this same file, the following phases (simplification, context validation, effort, judge planning, commits) as subtasks.
+- [ ] Breakdown — Break the plan file down into task files starting at 01, without reusing or reprocessing task 00. Read the plan and the local knowledge (vault/ or skills) and materialize task files 01..N by direct write, following the structure of `skills/gubia/scaffold_task.md`. Then queue, in this same file, the following phases (simplification, context validation, judge planning, commits, effort) as subtasks.
 - [ ] Simplification — Split subtasks that don't fit in one iteration: screen by text and, for each candidate, replace it with simple subtasks in the same file.
 - [ ] Context validation — Revalidate that the `Linked context` of each product task file is still current against the repo's current state; fix or remove stale links.
-- [ ] Effort — Interleave `[effort …]` subtasks that change the model's capability into each product task file, as standalone subtasks (never an inline tag).
 - [ ] Judge planning — Invoke `/judge plan` on each product task file to insert the missing `[judge]` and `[create evidence]` checkpoints.
-- [ ] Cleanup — Leave the plan file as a lean index: keep the objective/context, links, and `[x]` entries; remove detail duplicated in the tasks.
 - [ ] Commits — Only if the repo is git: interleave commit subtasks after each judge block of each product task file. If it isn't git, mark this subtask `[x]` with no further effect.
+- [ ] Effort — Run `skills/gubia/scripts/effort-expand-00.sh` to queue, right after this subtask, one `Interleave effort subtasks for \`task/NN.md\`` bullet per product task file; each of those bullets places the `[effort …]` subtasks into its file per `skills/gubia/effort.md` (which runs `effort-plan.sh --apply`).
+- [ ] Cleanup — Leave the plan file as a lean index: keep the objective/context, links, and `[x]` entries; remove detail duplicated in the tasks.
 EOF
 
 tmp_file="$(mktemp)"

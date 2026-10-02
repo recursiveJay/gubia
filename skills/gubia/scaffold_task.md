@@ -26,7 +26,6 @@ Structure of a product task file (`task/NN.md`, from `01.md` onward, next to the
 
 ## Subtasks
 
-- [ ] [effort <low|medium|high>] Fix the model's capability: run `gubia effort set <level>`.
 - [ ] Validate the linked context of this file against the repo's current state; if it's stale, update the affected sections before continuing.
 - [ ] <implementation subtasks for the first block>
 - [ ] [judge] <checkpoint title>
@@ -40,7 +39,6 @@ Structure of a product task file (`task/NN.md`, from `01.md` onward, next to the
 ## Structural rules
 
 - **Five sections, in this order**: `Objective`, `Linked context`, `Constraints`, `Happy path`, `Subtasks`.
-- **First bullet `[effort …]`, second the context validation** (only in product task files `01.md`+; manifest `00.md` is excluded from effort marks). The effort one is prepended by the effort phase, not the breakdown.
 - **No code**: no snippets, no diffs, no long commands. References by path + description. The exception is the evidence commands inside a `[judge]`, which are the evidence itself.
 - **Real paths, never assumed conventions**: verify where the repo's documentation/code actually lives before naming paths.
 - **Concrete and verifiable subtasks, never qualitative**: ❌ "check quality", ✅ "ensure `/healthz` responds 200 in < 300 ms under `scripts/load_healthz.sh`".

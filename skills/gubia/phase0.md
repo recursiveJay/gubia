@@ -32,17 +32,17 @@ not be attributed to the plan's existence.
 4. Finish.
 
 It does nothing else: it doesn't drain any subtask of task 00, it doesn't
-touch task 01 onward, it doesn't invoke the engine. The content of the
-manifest's subtasks (breakdown, simplification, context validation, effort,
-judge-instrument, cleanup, commits phases) is task 00's own contract; it
-lives in `scripts/bootstrap-phase0.sh` and isn't repeated here.
+touch task 01 onward, it doesn't invoke the engine. The manifest's subtasks
+(and their full descriptions) are task 00's own contract; it lives in
+`scripts/bootstrap-phase0.sh`. Only the order is repeated in "Task 00
+contract" below.
 
 ## Task 00 contract
 
 Task 00 is the reserved manifest that orchestrates the breakdown.
 `scripts/bootstrap-phase0.sh` materializes it with these fixed subtasks, in
-this order: Breakdown, Simplification, Context validation, Effort,
-Judge-instrument, Cleanup, Commits.
+this order: Breakdown, Simplification, Context validation, Judge planning,
+Commits, Effort, Cleanup.
 
 The file must open with exactly this heading and this note, before any
 subtask:
@@ -50,10 +50,10 @@ subtask:
 `# Task 00 — Drain phase 0`
 
 `Mandatory header note: this reserved file (task 00)`
-`only orchestrates breaking the plan down into product tasks. It's not a`
+`only orchestrates breaking the plan down into product tasks. It is not a`
 `product task and is excluded from simplification, context validation,`
-`effort, judge-instrument, cleanup, and commits; a second phase0 pass`
-`doesn't reprocess it either, nor reuse it as a product task.`
+`effort, judge planning, cleanup, and commits; a second phase0 pass does`
+`not reprocess it or reuse it as a product task either.`
 
 Task 00 is **excluded from all of phase 0's own work**: none of the later
 phases reprocess it. Specifically, task 00 doesn't go through subtask
