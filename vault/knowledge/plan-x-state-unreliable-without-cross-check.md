@@ -57,6 +57,29 @@ never accumulates; the rejection is invisible in the task file, only in
 the iteration logs. Cross-check `.gubia/logs/*.out` for the judge's
 rejection text, not the task file's annotations.
 
+## A lost checkbox silently skips a `[judge]`/`[scribe]` checkpoint
+
+The loop locates the next subtask by scanning for the first `- [ ]` bullet.
+A checkpoint is just another bullet in that scan: if its checkbox is lost
+during an edit — the line reading `- [judge] …` instead of
+`- [ ] [judge] …` — the scan no longer sees it as pending and jumps to the
+next subtask, silently bypassing the checkpoint. The drain proceeds as if
+the checkpoint did not exist.
+
+Symptom: a `[judge]`/`[scribe]` that is present in the file but never
+appears in the iteration logs; the drain goes from the last implementation
+subtask directly to Commit. It happens when a prior edit (repairing a
+malformed line, moving a bullet, restoring text) rewrites the line without
+re-adding the `[ ]` prefix.
+
+Rule: after any edit that touches a plan/task file's structural lines,
+grep for `^- \[(judge|scribe)` and restore the `[ ]` checkbox on any line
+missing it, before marking the surrounding subtask done.
+
+Evidence: task 01, `.gubia/logs/14.out` — "the checkpoint line had lost its
+checkbox (it read `- [judge] …` instead of `- [ ] [judge] …`). Because of
+that, the loop's 'first - [ ]' search would have skipped it."
+
 ## Common rule
 
 Do not consider a task done until ALL its pending checkpoints are
