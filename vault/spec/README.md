@@ -12,6 +12,7 @@ folder is the project spec, written against the live code of the repo.
 | [engine.md](engine.md) | engine decisions and contract: CLI, local state, rotation, process management, script structure | `gubia` (executable, 2172 lines) |
 | [catalog.md](catalog.md) | global agent catalog: models, fallback lists, contract of the `agent_*` functions, `agent_probe` | `config/agents.sh` |
 | [installation.md](installation.md) | installation and sync: projecting skills to harnesses, `install-config`, `config validate` | `justfile` |
+| [effort-placement.md](effort-placement.md) | deterministic placement of `[effort …]` subtasks in phase 0: scripts, keyword table, manifest order | `skills/gubia/` |
 
 These three files replace the historical v1 spec (stale: ~550 lines,
 nonexistent layers, outdated counts). Every fact is anchored to the
