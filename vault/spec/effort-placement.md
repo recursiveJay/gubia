@@ -127,7 +127,7 @@ Task 00 itself stays excluded from effort marks, as today.
 
 ### Out of scope
 
-- Parallelizing phase 0 (recorded in `vault/TODO.md`).
+- Parallelizing phase 0 (recorded in `vault/todo/parallelize-phase-0.md`).
 - Changing `judge.md`'s effort escalation.
 - Re-running `--apply` mid-drain.
 
@@ -143,4 +143,4 @@ Task 00 itself stays excluded from effort marks, as today.
 | `skills/gubia/scaffold_task.md` | remove the fixed first `[effort …]` bullet and its rule |
 | `vault/skills/gubia/phase0.md` | sync the documentary mirror (it already differs from `skills/`) |
 | `tests/gubia_effort_plan.bats` | new, plus any existing test that depends on the manifest order |
-| `vault/TODO.md` | entry: parallelize phase 0 |
+| `vault/todo/parallelize-phase-0.md` | entry: parallelize phase 0 |

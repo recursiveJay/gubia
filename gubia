@@ -1552,7 +1552,7 @@ run_resolve_max_iterations() {
 # `.gubia/logs/*.prompt`, or 0 when none exist. The loop pre-increments
 # it, so the first set this run writes is highest+1 and a relaunch
 # continues where the previous run stopped instead of colliding with
-# its `1.*`, `2.*`, … (`vault/TODO.md`, item 2, fix a).
+# its `1.*`, `2.*`, … (`vault/todo/loop-rule-2-no-enforcement.md`).
 #
 # Inferred from disk, never persisted: `state.env` stays the 6 scalars
 # of `vault/spec/engine.md` ("Local state"). `.prompt` is the anchor
