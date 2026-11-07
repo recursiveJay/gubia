@@ -44,7 +44,7 @@ Structure of a product task file (`task/NN.md`, from `01.md` onward, next to the
 - **Concrete and verifiable subtasks, never qualitative**: ❌ "check quality", ✅ "ensure `/healthz` responds 200 in < 300 ms under `scripts/load_healthz.sh`".
 - **No human intervention**: no subtask may ask for confirmation, wait for input, or introduce a gate that only a human can lift.
 - **Every subtask fits in one iteration**: the simplification phase splits any that don't.
-- **Review closure: `[judge]` and `[scribe]`, nothing else.** Verification blocks close with `[judge]` (and `[judge regression]` if applicable); the whole file closes with `[scribe]` as the last subtask, always after the last `[judge]`. There are no `chivato`, `maestro review`, or `forja review` bullets.
+- **Review closure: `[judge]` and `[scribe]`, nothing else.** Verification blocks close with `[judge]` (and `[judge regression]` if applicable); the whole file closes with `[scribe]` as the last subtask, always after the last `[judge]`.
 
 ## The `[judge]` checkpoint
 

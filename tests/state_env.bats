@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the "create evidence" subtask of plan/02.md: the creation of
+# Test of the "create evidence" subtask: the creation of
 # `.gubia/state.env` with its 6 keys and default values.
 #
 # The script under test is launched from a temporary repo (mktemp -d)

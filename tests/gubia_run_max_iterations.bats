@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the loop iteration counter and its ceiling
-# (plan/06.md: "Implement the `gubia run` loop iteration counter and its
+# ("Implement the `gubia run` loop iteration counter and its
 # check against `max_iterations` (default 500), stopping with exit 0 when
 # it is reached").
 #

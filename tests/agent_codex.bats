@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of agent_codex (plan/03.md): checks that the function wires up
+# Test of agent_codex: checks that the function wires up
 # stdin transport (GUBIA_PROMPT_MODE + trailing `-` in the argv) and
 # file output (GUBIA_OUTPUT_MODE + `-o "$console_output"`).
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of `systemd-run` detection in `require_tools` (plan/05.md,
-# subtask "Add a bats-core test that simulates the absence and the
+# Test of `systemd-run` detection in `require_tools` (subtask "Add a bats-core test that simulates the absence and the
 # presence of `systemd-run` in the `PATH` and verifies that
 # `require_tools` emits a single warning on stderr when it is missing,
 # allowing execution without a memory limit").

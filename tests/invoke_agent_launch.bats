@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the agent launch (plan/05.md, subtask "Implement the agent
+# Test of the agent launch (subtask "Implement the agent
 # launch with `setsid` and `</dev/null`, with stdout/stderr redirected to
 # separate files under `.gubia/logs/`").
 #

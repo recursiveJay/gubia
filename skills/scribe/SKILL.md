@@ -49,8 +49,5 @@ to find them.
 - It does not implement product code in either of its two actions: it distills
   and organizes knowledge, never fixes the code or the task files it
   describes.
-- It does not delegate to `forja`: that skill does not exist yet in this
-  project: all references to it are omitted until it is created in another
-  session.
 - In normal use only the corresponding action's file is loaded; the
   other one is only read when reviewing or maintaining the skill itself.

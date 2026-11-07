@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of resolving the plan to an absolute path once at startup, with
-# `die` if the path does not fall under the project root (plan/04.md:
-# "Implement resolving the plan path to absolute once at startup, with
+# `die` if the path does not fall under the project root ("Implement resolving the plan path to absolute once at startup, with
 # `die` if the path does not fall under the project root").
 #
 # The `run_` module is sourced from the script (`BASH_SOURCE` guard):

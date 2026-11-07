@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # e2e test of the two concurrency exits of the loop
-# (plan/06.md: "Implement the stop file check before each iteration of
+# ("Implement the stop file check before each iteration of
 # the `gubia run` loop, stopping if it exists" and
 # "vault/spec/engine.md", "Concurrency": the per-plan `flock`).
 #

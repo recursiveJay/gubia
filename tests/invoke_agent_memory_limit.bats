@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the memory limit via systemd-run (plan/05.md, subtask
+# Test of the memory limit via systemd-run (subtask
 # "[create evidence] Add a bats-core test with a fake `systemd-run` in
 # the `PATH` that verifies `invoke_agent` invokes it with
 # `--user --scope -p MemoryMax=<memory_max>` when the tool is

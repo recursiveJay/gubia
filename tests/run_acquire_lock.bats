@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the mutual exclusion of the `flock` per plan file
-# (plan/04.md: "Implement the `flock` per plan file").
+# ("Implement the `flock` per plan file").
 #
 # The `run_` module is sourced from the script (`BASH_SOURCE` guard)
 # for the first block, which sets the exact lockfile name

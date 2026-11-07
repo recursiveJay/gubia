@@ -1,264 +1,124 @@
 ---
 name: write-vault-against-live-code
-description: "When creating or migrating vault/ documentation that describes live code, write against the source citing exact paths+lines and verify with grep that no references to destilado/ or referencia/ remain; when the doc is a reference layer (summary, not a copy), the [judge]'s acceptance criterion compares length/size against the source, not just an eyeballed content review; and when executing a task that cites file:line references to update, re-grep each one before editing — the inventory is a claim about the repo, not a fact; and, when executing a rename task of a migration plan, prefer an anchored-regex criterion over extra path exclusions when the surviving leftover is a hyphenated variant of the old name, and stage for the commit only the files the task touched, leaving unrelated working-tree drift unstaged; and a [judge] criterion pinning an exact count of expected matches is a plan-time claim too — refine it at execution time when a later commit legitimately added a match, never force the repo to the stale number."
+description: "When writing vault/ documentation that describes live code, write against the source citing exact paths+lines, never copy an older spec; when the doc is a reference layer (summary, not a copy), the [judge] compares length against the source; a plan's file:line inventory, grep-based criteria and pinned match counts are claims about the repo at drafting time — re-verify and scope them at execution time; fan-out subtasks are split into single-iteration chunks; a [commit] subtask stages what the working tree actually carries, never `git add -A`; an accent-character class needs a UTF-8 locale."
 type: methodology
 ---
 
-The historical `destilado/` spec was out of date with respect to the current
-code in at least five dimensions, verified while writing `vault/spec/` (task
-03):
+## Write against the live source, not an older spec
 
-- `gubia` lines: ~550 → 2158;
-- layers named in the script's header comment (`agents_`/`integrity_`) that
-  **do not exist** in the code — the real ones are
-  `state_`/`run_`/`invoke_`/`config_`;
-- synchronized skills: 2 → 3 (`scribe` was missing);
-- `agent_probe` omitted from the agent catalog;
-- `install-config` absent from the installation documentation.
-
-Copying `destilado/` literally would have propagated those errors into
-`vault/`. The following procedure was applied successfully to the four
-`vault/spec/` files (`engine.md`, `catalog.md`, `installation.md`, `README.md`)
-and is reusable for any new `vault/` content:
+An older spec of the same code drifts: line counts, layer names, the list of
+synchronized skills, the agent catalog and the installation steps all went
+stale in at least five places in the one that was checked. Copying it
+literally propagates those errors into `vault/`. Procedure:
 
 1. Read the live source cited in the task (`gubia`, `config/agents.sh`,
-   `justfile`, the skills…), **not** the historical spec.
+   `justfile`, the skills…), **not** the older doc.
 2. Write in prose with exact paths and lines; no code dumps or extensive
    diffs.
-3. Verify `grep -rl "destilado\|referencia/" vault/<dir>/` returns empty
-   before considering a file done.
-4. Cite as evidence the concrete confirmed paths+lines (e.g.
-   `config/agents.sh:32`, `gubia:1938`), not unanchored counts.
+3. Grep that no reference to the retired doc remains before considering a
+   file done.
+4. Cite as evidence concrete confirmed paths+lines (e.g.
+   `config/agents.sh:32`), not unanchored counts.
 
 ## Reference layer verified by length, not content
 
-When a task asks for a "summary, not a copy" reference layer over some
-source files (e.g. `vault/skills/` summarizing `skills/`), the acceptance
-criterion for the `[judge]` subtask should include a cheap, objective
-metric in addition to the qualitative review: comparing the size/length of
-each destination file against its source (`find` + line or byte count).
+When a task asks for a "summary, not a copy" layer over some source files
+(e.g. `vault/skills/` summarizing `skills/`), the `[judge]` acceptance
+criterion should include a cheap objective metric besides the qualitative
+review: compare the size of each destination file against its source (`find`
++ line or byte count). In the task that created `vault/skills/` the 8
+reference files came out at 20%–40% of their source's length. Requiring the
+threshold avoids accepting a "summary" that reproduces nearly everything.
 
-In the task that created `vault/skills/` (`plan/task/04.md`, lines 59-61),
-the `[judge]` verified that the 8 reference files occupy between 20% and
-40% of the length of their corresponding source file in `skills/`
-(evidence: `.gubia/logs/19.out`, positive verdict citing that range).
-Requiring this quantitative threshold, not just "it isn't a literal copy",
-avoids accepting a "summary" that in practice reproduces nearly all of the
-original content.
+## A "no live references remain" grep must exclude the destination and files pending deletion
 
-## The "no live references remain" grep must exclude the destination and files pending deletion
+Excluding only the source being removed gives false positives in two
+legitimate places that are not the current task's responsibility:
 
-When this same kind of grep is used as the acceptance criterion of a
-`[judge]` to confirm that no live references remain to something migrated or
-in the process of being removed (not only when writing a new file, but when
-reviewing the whole repo), excluding only the source being migrated/removed
-is not enough: it yields false positives in two legitimate places that are
-not the responsibility of the task in progress.
+- The migration's **destination directory** (`vault/`), when it cites the old
+  term to narrate history or holds reference copies that deliberately
+  reproduce old rules.
+- **Files pending deletion in a later task** of the same plan.
 
-- The migration's **destination directory** (`vault/`), if it contains
-  documentation that cites the old term for historical/descriptive purposes
-  (narrating the migration itself) or reference copies that deliberately
-  reproduce old rules from another file (e.g. `vault/skills/` documenting a
-  rule the original has not yet lost).
-- **Files pending deletion in a later task** of the same plan (not the one
-  being executed now): while they exist, the grep finds them, but fixing or
-  excluding them is not in scope of the current task (e.g. `persona-SKILL.md`,
-  pending deletion in a later closing task).
+The `judge` skill does not treat this as a rejection of the work ("Case A:
+negative"): it is "Case B: the harness is missing" — the verification
+criterion is poorly scoped. Insert a subtask that refines the evidence
+command (adding the missing exclusions) instead of repeating the
+reject/correct cycle. A later checkpoint re-checking the same thing (e.g. a
+closing `[judge regression]`) reuses the already-validated command literally
+and only widens it if its scope is broader.
 
-When this happens, the `judge` skill does not treat it as a rejection of the
-work ("Case A: negative"): it classifies it as "Case B: the harness is
-missing" — the work may be fine, but the verification criterion is poorly
-scoped. The fix is to insert a subtask that refines the evidence command
-(adding the missing exclusions), not to repeat the reject/correct cycle of
-the work itself.
+## Scope the grep criterion to the changed section, not the whole file
 
-Evidence: task 05 of the migration to `vault/` (`plan/task/05.md:114-141`);
-the `[judge]` rejected the literal command of the original criterion
-(excluding only `vault-migration.md`, `plan/` and `destilado/`) because it
-returned matches in `persona-SKILL.md` and in out-of-scope `vault/`, and
-inserted the `[create evidence]` subtask that added `--exclude-dir=vault` and
-`--exclude=persona-SKILL.md` to the command.
-
-A later `[judge]` checkpoint of the same plan that needs to repeat this same
-kind of verification (e.g. a closing `[judge regression]` that re-checks "no
-live references" over the whole repo) must **reuse literally** the command
-already scoped and validated in the previous checkpoint, instead of
-re-deriving the exclusions from scratch: the correct harness was already
-fixed once, and reasoning it out again is repeated work that also risks
-omitting an already-known exclusion. Evidence: task 06
-(`plan/task/06.md:86-93`), whose `[judge regression]` reuses as-is the
-command from task 05 (with `--exclude-dir=vault` and
-`--exclude=persona-SKILL.md`) and only adds `--exclude-dir=.git`,
-`--exclude-dir=destilado` and `--exclude=vault-migration.md` because the
-closing scope is broader.
-
-## The grep criterion must be scoped to the changed section, not the whole file
-
-The same grep-as-judge-criterion pattern fails the other way too: a bare
-`grep <phrase> <file>` over an entire file matches **unrelated** occurrences
-of the phrase, rejecting work the change never touched. In task 03 the
-criterion "`grep -n "isn't implemented" vault/spec/engine.md` returns
-nothing" (meant to confirm the log-rotation gap note was gone) also matched
-an integrity-detector note at `vault/spec/engine.md:80` ("That capability
-isn't implemented in the live code"), forcing a spurious reword of unrelated
-prose to "absent from the live code" (`plan/task/03.md:42`). The judge verdict
-then oscillated PASS/FAIL across adjacent iterations as the loop re-marked the
-subtask.
-
-When writing a grep-based judge criterion, scope it to the section or line
-range actually being changed (e.g. `vault/spec/engine.md:256-277`), never the
-whole file — the same scoping lesson as the exclusion case above, from the
-opposite side.
+A bare `grep <phrase> <file>` over a whole file also matches unrelated
+occurrences, rejecting work the change never touched (and forcing a spurious
+reword of unrelated prose; the verdict may oscillate PASS/FAIL as the loop
+re-marks the subtask). Scope it to the line range being changed (e.g.
+`vault/spec/engine.md:256-277`).
 
 ## A plan's reference inventory is a claim about the repo, not a fact
 
-When a task hands over an explicit list of `file:line` references to update (a
-rename or migration inventory), that list was grep-verified when the plan was
-drafted; by the time the task is executed it can be stale. Re-grep every
-cited reference **before** editing it, and treat the plan's inventory as a
-hypothesis to confirm, not as a work order whose target is guaranteed to exist
-in the form described.
+An explicit list of `file:line` references to update was grep-verified when
+the plan was drafted; by execution time it can be stale. Re-grep each cited
+reference **before** editing it. A target that no longer carries the string
+is a legitimate **no-op**: record the verified absence on the subtask line
+(command plus exit code) and move on. Never invent the missing reference or
+edit a file just to look fulfilled.
 
-A reference-update subtask whose target turns out not to carry the string is a
-legitimate **no-op**: record the verified absence on the subtask line (command
-plus its exit code) and move to the next one. Never invent the missing
-reference, and never edit a file that does not carry the string, just to make
-the subtask look fulfilled.
+## Anchored regex over path exclusions for hyphenated historical names
 
-Evidence: `plan/task/01.md:12` — the plan asserted that
-`skills/judge/judge.md:41` carried `vault/conocimiento/`; `grep -n conocimiento
-skills/judge/judge.md` returned exit 1, while the only live judge-side
-reference was the condensed mirror `vault/skills/judge/judge.md:41`. The
-subtask was rewritten as an explicit no-op instead of fabricating an edit
-(`.gubia/logs/9.out:7`).
-
-## An anchored-regex criterion replaces path exclusions for hyphenated historical names
-
-When the acceptance criterion of a `[judge]` is "no live reference to `X.md`
-remains", the repo usually also carries *historical* names that merely begin
-with the old stem (`motor-decisiones.md`, `motor-contrato.md`,
-`catalogo-agentes.md`: trees that no longer exist on disk and whose mentions
-must survive). A plain-substring grep (`conocimiento`, `motor`) matches those
-too, so the criterion has to grow `:(exclude)` paths to stay green, whereas a
-criterion anchored to the full filename as a regex (`motor\.md`,
-`catalogo\.md`) cannot match a hyphenated sibling at all.
-
-Prefer the anchored regex when what must survive is a hyphenated variant of
-the old name: it keeps the evidence command short and makes the exclusion
-reason unnecessary. Keep the path exclusions for leftovers that genuinely
-contain the exact filename, because the regex cannot separate those.
-
-Evidence: task 01's criterion was the plain substring `git grep -n
-conocimiento` with three exclusions (`plan/task/01.md:41-44`); task 02's was
-`git grep -nE 'motor\.md'` over the same three exclusions and no more, with
-the reason stated literally in the task file (`plan/task/02.md:39`: "The
-historical `motor-decisiones.md`/`motor-contrato.md` names do not match
-`motor\.md`"), verified empty in `.gubia/logs/18.out:1`. Conversely, task 04
-carried leftovers that do match `instalacion\.md` (cited from a live note);
-there the regex buys nothing and each leftover is handled either as the
-"destination documentation" case above or as a stale expected count, below.
+When the criterion is "no live reference to `X.md` remains" and the repo also
+carries historical names that merely begin with the old stem
+(`motor-decisiones.md`…), a plain-substring grep matches them too and needs
+`:(exclude)` paths. A regex anchored to the full filename (`motor\.md`)
+cannot match a hyphenated sibling, so the command stays short. Keep path
+exclusions for leftovers that contain the exact filename.
 
 ## A pinned expected count goes stale like a reference inventory
 
-A judge criterion written at plan time that pins an **exact count** of
-expected matches ("returns exactly one line") is a claim about the repo at
-drafting time, and later commits — including this migration's own scribe
-distillations — can legitimately add a match. The executor then has a choice:
-force the repo to match a stale number, or refine the number in the task file
-at execution time and record why the criterion changed. Choose the second:
-refine the criterion *before* the `[judge]` runs, stating the source of the
-new match in the same line, so the judge verifies against the corrected
-number and the edit stays auditable.
+A criterion such as "returns exactly one line" is a drafting-time claim;
+later commits (including scribe distillations) can legitimately add a match.
+Refine the number in the task file *before* the `[judge]` runs, stating the
+source of the new match on the same line, so the judge verifies the corrected
+number and the edit stays auditable. Symptom of the opposite: a subtask
+edited backwards — removing a legitimate surviving match — just to reach the
+pinned count.
 
-Symptom of the opposite (the plan number being treated as a work order): a
-subtask edited backwards — removing a legitimate surviving match, or an
-intentional one — just to reach the pinned count.
+## Split a fan-out inventory subtask into chunks before the loop runs it
 
-Evidence: `plan/task/04.md:35` was written as "returns exactly 1 line"; by
-execution time the corpus carried 2 intentional `destilado/instalacion.md`
-citations, the second (`vault/knowledge/write-vault-against-live-code.md:157`)
-having been added by task 02's own scribe commit `c2fed40`, which cites this
-very criterion. The refinement was done in the rename iteration
-(`.gubia/logs/28.out:6`: "I refined the `[judge]` criterion in
-`plan/task/04.md` accordingly (it claimed \"exactly 1 line\", stale since
-`c2fed40`)") and the judge then verified the refined 2-line criterion
-literally (`.gubia/logs/29.out:8`: "Exactly 2 lines, both intentional
-historical `destilado/instalacion.md` citations — matches the refined
-acceptance criterion literally").
-
-Same lesson as "A plan's reference inventory is a claim about the repo, not a
-fact", from the criterion side: both are plan-time claims to re-derive before
-acting, not to satisfy by force.
-
-## A fan-out inventory subtask is split into chunks before the loop runs it
-
-A reference-repoint subtask whose site list runs into the tens (the 43
-`motor-decisiones.md` citations in `plan/task/01.md`) is a fan-out that spans
-far more than one iteration, and that shape collides with the loop's
-"already done" exception: verifying each site as already-done burns the
-3-consecutive-skip budget and stalls the loop (task 01 hit the limit twice —
-`.gubia/logs/9.out`, `.gubia/logs/2.out`). Split such a subtask during the
-phase-0 simplification pass into chunks sized so each is a single iteration
-(43 sites became 11/11/11/10), keeping the per-chunk line ranges explicit on
-each subtask line so a completed chunk records what it covered. Evidence:
-`.gubia/logs/15.out` — "split the one fan-out candidate ... into four chunks
-of 11/11/11/10 line numbers."
+A reference-repoint subtask with tens of sites (e.g. 43 citations) spans far
+more than one iteration and collides with the loop's "already done"
+exception: verifying each site as already-done burns the 3-consecutive-skip
+budget and stalls the loop. Split it during the phase-0 simplification pass
+into chunks of one iteration each (43 became 11/11/11/10), keeping the
+per-chunk line ranges explicit on each subtask line.
 
 ## The `[commit]` subtask commits what earlier iterations already staged
 
-The phase-0 scaffold splits each rename into separate subtasks: the rename
-plus its reference edits in one iteration, the `[judge]` checkpoint on the
-staged tree in the next, and a `[commit]` subtask after it. Two consequences
-repeat identically in every rename task of such a migration plan:
+The scaffold splits a rename into the edit iteration, the `[judge]`
+checkpoint on the staged tree, and a `[commit]` subtask after it:
 
-- The commit subtask finds the working tree already edited and staged; it
-does not produce the edits. Do not re-apply or re-verify them there: stage
-the rename's files as they stand (`plan/task/02.md:41`, evidence
-`.gubia/logs/18.out:3` "staged", then `.gubia/logs/19.out:3` "were already
-staged/edited from previous iterations").
-- The working tree can carry drift unrelated to the migration, belonging to
-the user (here a modified `config/agents.sh` model map). Stage explicitly the
-files the task touched; never `git add -A` or `git commit -a`, which would
-fold that drift into the rename's logical commit. Report it as deliberately
-left unstaged.
+- The commit subtask finds the tree already edited and staged; do not
+  re-apply or re-verify the edits there, just stage the rename's files as
+  they stand.
+- The tree can carry unrelated drift belonging to the user (e.g. a modified
+  `config/agents.sh` model map). Stage explicit files; never `git add -A` or
+  `git commit -a`. Report the drift as deliberately left unstaged.
 
-Evidence: `plan/task/01.md:45` and `plan/task/02.md:41` state it on the
-subtask line; `.gubia/logs/13.out:1` and `.gubia/logs/19.out:4` show both
-rename commits of this phase leaving `config/agents.sh` out.
-
-The explicit-path list on the `[commit]` subtask line is itself a plan-time
-claim and can **under-specify** the touched set: when the repointing spread
-further than the listed paths, the commit subtask of task 01 found two
-additional files (`gubia_run_stop_flock.bats`, the `repo-minimal` fixtures)
-that carry the same citation repoints but were omitted from the listed six.
-The authoritative set is the working tree (`git status`/`git diff`), not the
-scaffold's path list: stage every file that actually carries the change,
-including the ones the list missed, and record the deviation on the subtask
-line rather than dropping them to honor the list. Evidence:
-`plan/task/01.md` commit line — "commit 7e95f0b, 8 files; also staged
-gubia_run_stop_flock.bats and repo-minimal fixtures — they carry citation
-repoints the listed paths omitted".
+The explicit path list on the subtask line is itself a plan-time claim and
+can under-specify the touched set (one rename found two extra files carrying
+the same repoints). The authoritative set is `git status`/`git diff`: stage
+every file that actually carries the change and record the deviation on the
+subtask line.
 
 ## An accent-character class needs a UTF-8 locale, or it matches bytes
 
-A regex class of accented letters (`[áéíóúüñÁÉÍÓÚÜÑ¿¡]`) matches the intended
-characters only when the matcher decodes input as UTF-8. Under the default
-`LC_ALL=C`, `grep`/`git grep` treat the class as a **byte set**, so every
-multi-byte UTF-8 sequence sharing one of those bytes matches — `≥` (U+2265),
-`≠` (U+2260), `≤` (U+2264), `§` (U+00A7), the em-dash (U+2014), and emoji
-(`❌`/`✅`) all false-positive. Symptom: an "accent sweep" reports dozens of
-lines that visibly carry no Spanish accent.
+A class such as `[áéíóúüñÁÉÍÓÚÜÑ¿¡]` matches the intended characters only if
+the matcher decodes UTF-8. Under the default `LC_ALL=C`, `grep`/`git grep`
+treat it as a **byte set**, so `≥`, `≠`, `≤`, `§`, the em-dash and emoji
+false-positive; an "accent sweep" reports dozens of lines with no Spanish
+accent (one run: ~40 byte-mode hits vs 4 genuine lines).
 
-Fix before trusting the count: force a UTF-8 locale — `export
-LC_ALL=C.UTF-8` before `grep`, or use a UTF-8-aware matcher (`grep -P
-'(*UTF)[…]'`, or a Python scan decoding files as UTF-8). Then classify each
-surviving hit by hand (several are legitimately out of scope: attribution,
-design rationales, historical narrations), never by the raw number.
-
-Evidence: fase 2's step-5 exhaustive sweep (`plan/fase2.md`) ran the accent
-regex under `LC_ALL=C`; the byte-mode run reported ~40 hits (`≥`/`≠`/`≤`/
-`§`/`—`/`❌`/`✅` plus the real `Javi García Peña` and `¡escriba esto!`),
-while the UTF-8-exact sweep returned only 4 genuine Spanish-character lines
-(`LICENSE:189`, `NOTICE:2,4`, `skills/scribe/SKILL.md:11`). The migration's
-own reference script `scripts/check-language.sh` documents the same trap and
-sets `export LC_ALL=C.UTF-8` for this reason.
+Fix before trusting the count: `export LC_ALL=C.UTF-8`, or use a UTF-8-aware
+matcher (`grep -P '(*UTF)[…]'`, or a Python scan decoding as UTF-8). Then
+classify each surviving hit by hand, never by the raw number.

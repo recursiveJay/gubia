@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the installed-skills check in `gubia config validate`
-# (plan/06.md: "Implement in `gubia config validate` the check that the
+# ("Implement in `gubia config validate` the check that the
 # `gubia`/`judge` skills are installed in the harness of each model in
 # the active fallback list").
 #

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of exit codes 126/127 (plan/05.md, subtask "Add a bats-core test
+# Test of exit codes 126/127 (subtask "Add a bats-core test
 # with a fake CLI in the `PATH` that verifies that exit codes 126 and
 # 127 cause an immediate `die` instead of rotation").
 #

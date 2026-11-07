@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the injected prompt composition (plan/04.md: "Implement the
+# Test of the injected prompt composition ("Implement the
 # injected prompt composition: fixed literal header from
 # `vault/spec/engine.md` § "Contract injected per iteration" followed by
 # the full content of the plan file,

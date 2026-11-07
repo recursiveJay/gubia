@@ -1180,8 +1180,7 @@ invoke_prepare() {
   # contaminate the iteration's observation — the captured stderr must
   # be only the agent's. The spec fixes the limit formula (`--user
   # --scope -p MemoryMax=`); the silence is a requirement of this
-  # layer's own capture contract, not a free option (the original ralph
-  # carries `-q` for the same reason).
+  # layer's own capture contract, not a free option.
   invoke_prefix=()
   if [[ "$invoke_systemd_run" == yes && -n "${memory_max:-}" ]]; then
     invoke_prefix=(systemd-run --user --scope -q -p "MemoryMax=${memory_max}")
@@ -1576,7 +1575,7 @@ run_infer_log_seq() {
 
 # Prunes `.gubia/logs/` to the `loop_max_logs` most-recent iteration
 # log sets, ordered by modification time of each set's `.prompt`
-# anchor (`plan/log-rotation-prd.md`, R1-R5). An "iteration set" is
+# anchor (spec: `vault/spec/engine.md`, R1-R5). An "iteration set" is
 # every file sharing one numeric `<log_seq>` prefix across `.prompt`,
 # `.out`, `.err`, and `.console`; rotation treats it atomically —
 # deleting every suffix of a pruned set, never a subset (R1).

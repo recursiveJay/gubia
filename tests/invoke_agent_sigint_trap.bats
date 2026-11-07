@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the engine's SIGINT trap (plan/05.md, subtask "[create
+# Test of the engine's SIGINT trap (subtask "[create
 # evidence] Add a bats-core test that sends `SIGINT` to the engine
 # process during an invocation and verifies that the trap re-raises the
 # signal (`trap - INT; kill -INT "$$"`) with a reentrancy guard").

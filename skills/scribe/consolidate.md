@@ -53,5 +53,4 @@ repo has no `vault/`, this action never fires, neither chained nor manually.
 - Never lose evidence with an irreproducible observable symptom (a concrete
   log trace, a commit, a file line) when merging: the merged entry keeps the
   evidence of both source entries, not just the prose of one of them.
-- It does not delegate to `forja`: it does not exist yet in this project.
 - It does not implement product code.

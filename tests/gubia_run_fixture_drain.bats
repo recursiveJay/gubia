@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # E2e test of the full happy path over the versioned FIXTURE
-# (plan/plan/10.md: "Add an e2e test (bats-core) that runs
+# ("Add an e2e test (bats-core) that runs
 # `gubia run` over the fixture's plan and verifies it creates `stop.md`
 # next to the plan after draining all subtasks").
 #

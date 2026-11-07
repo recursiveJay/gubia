@@ -19,6 +19,10 @@ Pending `[scribe]` subtask, last one in the task file with everything else
   the single skill `skills/<repo>/SKILL.md` (one entry = one section).
 - Each surviving finding is classified as create / extend / delete, always
   checked against the existing inventory to avoid duplicating.
+- Findings that only narrate this session's circumstances (WIP in the tree,
+  staging driven by unrelated changes) are discarded; an embedded general
+  rule is kept without the session. Hashes, task numbers and logs go at most
+  in the evidence.
 - Builders run in parallel only in `vault/` mode; in sequence in single-skill
   mode (same file, risk of collision).
 - If after applying changes `vault/knowledge/` has >10 files, chains into

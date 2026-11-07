@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Unit test of `run_prune_logs` (plan/task/01.md): retains the
+# Unit test of `run_prune_logs`: retains the
 # `loop_max_logs` most-recently-modified iteration log sets under
 # `.gubia/logs/`, deleting every suffix of the pruned sets and leaving
 # unrelated files untouched. Ordering is by the mtime of each set's

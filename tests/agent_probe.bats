@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of agent_probe (plan/04.md, subtask "[create evidence]"): the
+# Test of agent_probe (subtask "[create evidence]"): the
 # engine's test agent, with which the invocation is verified without
 # touching any real CLI.
 #

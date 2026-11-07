@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Round-trip test for writing `state.env` (plan/02.md, last subtask):
+# Round-trip test for writing `state.env` (last subtask):
 # write a key with `state_set`, re-read the file from scratch
 # (`state_read`, without `source`-ing the file) and check that the
 # written value persists both on disk and in the exported variable.

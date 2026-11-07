@@ -160,12 +160,11 @@ then re-run `env -u GUBIA_AGENTS_SH just test` to `141 ok / 0 not ok`. The
 catalog edit itself stays uncommitted as a separate concern — it is never
 swept into the task's logical commit.
 
-The separation is at **hunk** granularity, not file granularity: task 01
-added `--respect-workspace-trust false` to `agent_devin` while the *same*
-`config/agents.sh` carried the uncommitted model-name WIP. Commit it with
-`git add -p`, staging only the in-scope hunk (2 insertions, commit 4bd9e78)
-plus the full edited test file — never `git add -A`/`git commit -a`, which
-would sweep the WIP in alongside the task's change.
+The separation is at **hunk** granularity, not file granularity: when the
+catalog file itself carries the uncommitted WIP, stage only the task's
+in-scope hunks with `git add -p` (plus any fully-owned file, such as the
+edited test) — never `git add -A`/`git commit -a`, which would sweep the WIP
+in alongside the task's change.
 
 Preventive guidance: before editing `config/agents.sh` model lists, grep the
 tests for hardcoded model names (e.g.
@@ -180,11 +179,9 @@ Because the failure is out of scope, `judge.md` makes it Case B — "not a fail
 for this block" — and the tempting move is to record `[not assessable]` and
 carry on. That closes the individual gate but **defers** the migration's own
 closure criterion (a green suite), so the identical red returns on the next
-task's `[judge regression]`: this happened verbatim in tasks 05 and 06
-(`.gubia/logs/37.out`, `38.out`, `46.out`), and the deferral was flagged at
-the time as blocking the closing task (`.gubia/logs/37.out:19`: "This also
-blocks task 07's closure (suite must be green)" — even though by then a
-one-line sentinel edit sufficed, `.gubia/logs/47.out:3`).
+task's `[judge regression]`: this happened verbatim in two consecutive tasks, and the deferral was
+flagged at the time as blocking the closing task (suite must be green) —
+even though by then a one-line sentinel edit sufficed.
 
 Distinguish the two flavours before choosing:
 

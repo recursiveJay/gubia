@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the `gubia effort set <low|medium|high>` subcommand
-# (plan/06.md: "Implement `gubia effort set <low|medium|high>` as a
+# ("Implement `gubia effort set <low|medium|high>` as a
 # subcommand that does not acquire the `flock`").
 #
 # Here the BINARY is exercised, not the sourced functions: the

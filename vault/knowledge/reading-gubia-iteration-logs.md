@@ -56,14 +56,8 @@ secondary colour, with the concrete quote inlined. When a `[scribe]` pass
 finds an entry whose `<iter>` citations have already rotted, correct the
 entry rather than reproducing the dead path.
 
-Evidence for the horizon: `.gubia/state.env:6` (`loop_max_logs=20`) with
-the retained corpus starting exactly at `.gubia/logs/34.*` while earlier
-iterations of this same plan (e.g. the `9.out`/`18.out`/`19.out`/`28.out`/
-`29.out` cited by `write-vault-against-live-code.md`) are gone. Evidence
-for the rot already materialised: this entry's own former `14.out`/`14.err`
-citations no longer resolve — `14.out` was then an unrelated `[scribe]`
-output and `14.err` held only `Working...` (verified 2026-09-23, before
-both were pruned away altogether).
+The horizon is `loop_max_logs` (see `.gubia/state.env`): only the newest
+iteration sets are retained, earlier ones are gone.
 
 ## An empty `.out` with a usage-limit `.err` is not a real failure
 
@@ -74,8 +68,8 @@ If the `.out` of a gubia engine iteration comes out empty (no
 this as a failure of the work itself or of the task file: it is an
 external quota exhaustion, outside the execution. The next relevant
 iteration resumes the first pending `[ ]` subtask without any problem, with
-no `[regression fix]` mark and no manual intervention (observed during the
-migration to `vault/`, task `plan/task/04.md`). Do not create a repair
+no `[regression fix]` mark and no manual intervention (observed during
+a migration task). Do not create a repair
 subtask or a regression checkpoint for this symptom.
 
 ## An empty `.out` is also what the running iteration looks like from inside it
@@ -99,9 +93,7 @@ In this repo every `.err` of a run holds the CLI's progress line alone
 (`Working...` in iterations 5-25), so the absence of a provider error in
 `.err` says nothing about the work.
 
-Evidence: iteration 25 of this plan (task `plan/task/03.md`, the `[scribe]`
-subtask). Observed from inside that same invocation: `25.prompt` at
-00:01:59.153, `25.out` 0 bytes at 00:01:59.154, `25.err` 11 bytes
-(`Working...`) at 00:01:59.919 — while the iteration was still running. It
-was the newest set (iteration 24 had closed at 00:01:44) and it never
-produced a failure record.
+Observed from inside a `[scribe]` invocation: `<n>.prompt` written first,
+`<n>.out` created 0 bytes about a millisecond later, `<n>.err` 11 bytes
+(`Working...`) under a second after — while the iteration was still running.
+It was the newest set and it never produced a failure record.

@@ -19,10 +19,10 @@ binary lives in the trimmed set.
 Observable symptom: negative assertions that fail only on the developer's
 host and pass in CI or other hosts without those binaries.
 
-Evidence: `.ralph/logs/plan/iteration-000355-20260829-211940.log` (text:
+Evidence: text:
 "with PATH="$fakebin:$PATH" the real binaries on this machine (claude,
 devin, omp in ~/.local/bin) leaked through and broke the negative
-assertions. Fix: PATH="$fakebin:/usr/bin:/bin""), committed in `990a39d`.
+assertions. Fix: PATH="$fakebin:/usr/bin:/bin"", committed in `990a39d`.
 
 ## Installer test against the real `$HOME` pollutes the machine
 
@@ -34,8 +34,7 @@ the devin and omp directories that had been created.
 
 Observable symptom: logs with the text "Restored — ~/.claude/skills/gubia
 and judge are back (re-synced from repo...". Evidence:
-`.ralph/logs/plan/iteration-000350-20260829-211410.log` (startup, the
-restoration), and `git log --oneline -- tests/` up to `648f087`.
+`git log --oneline -- tests/` up to `648f087`.
 
 ## Ambient GUBIA_AGENTS_SH defeats `rm config/agents.sh` + `HOME=`
 
@@ -54,10 +53,10 @@ clean shell — the classic "passes in CI, fails on the developer's host"
 signature. Ruled out as a regression by running `env -u GUBIA_AGENTS_SH
 just test` → 0.
 
-Evidence: task 01, `.gubia/logs/10.out` ("ambient `just test` fails test 45
-as PRE-EXISTING/environmental (GUBIA_AGENTS_SH exported by loop process,
-resolved directly at gubia:47-53; rm config/agents.sh + HOME= cannot make
-catalog absent)").
+Evidence: ambient `just test` failed test 45 as environmental
+(`GUBIA_AGENTS_SH` exported by the loop process, resolved directly at
+`gubia:47-53`; removing `config/agents.sh` and overriding `HOME=` cannot
+make the catalog absent).
 
 ## Common rule
 

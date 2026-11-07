@@ -23,7 +23,7 @@ one fails. Before accepting the lint regression of a task that touches
 `gubia`, run `scripts/lint-gubia.sh` instead of plain `just lint`.
 
 It happened in task 09 (`just lint` green while the tree carried the new
-test without shellcheck — `.ralph/logs/plan/iteration-000352-20260829-211550.log`)
+test without shellcheck)
 and recurred at plan-writing time in the fase-2 fix-a task (commit
 `208482e`): the task file's Constraints and `[judge]` acceptance criterion
 named `just lint` as the lint gate for a change that only touched `gubia`.
@@ -31,11 +31,11 @@ named `just lint` as the lint gate for a change that only touched `gubia`.
 ## Bare `bats` is not on PATH
 
 Scaffolded task files and acceptance criteria name `bats tests/` as the
-regression suite (e.g. `plan/task/01.md` "Regression suite: `bats tests/`",
-`plan/task/03.md` "Required evidence: run `bats tests/` from the repo root").
+regression suite (e.g. "Regression suite: `bats tests/`", "Required evidence: run
+`bats tests/` from the repo root").
 But there is no `bats` on the PATH in this environment: the gate fails
-immediately with `command not found: bats` (observed on the `[commit]`
-iteration of `plan/task/01.md`, 2026-09-26).
+immediately with `command not found: bats` (observed on a `[commit]`
+iteration, 2026-09-26).
 
 The binary is vendored as a git submodule at
 `tests/vendor/bats-core/bin/bats` (installed via `git submodule update --init

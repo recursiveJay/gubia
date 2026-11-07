@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the export of GUBIA_ROOT and GUBIA_PLAN into the environment
-# of the agent's child process (plan/04.md: "Implement the export of
+# of the agent's child process ("Implement the export of
 # `GUBIA_ROOT` and `GUBIA_PLAN` in the environment of the agent's child
 # process").
 #

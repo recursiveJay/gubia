@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the engine's EXIT trap (plan/05.md, subtask "[create
+# Test of the engine's EXIT trap (subtask "[create
 # evidence] Add a bats-core test that verifies the EXIT trap captures
 # `$?` in its first line, never deletes the lockfile, and has a
 # reentrancy guard").

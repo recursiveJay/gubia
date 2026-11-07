@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 
-# E2E test of the preflight over the versioned FIXTURE (plan/plan/10.md:
-# "Add an e2e test (bats-core) that runs `gubia config validate`
+# E2E test of the preflight over the versioned FIXTURE ("Add an e2e test (bats-core) that runs `gubia config validate`
 # over the fixture and verifies exit 0"). It is the first green that the
 # happy path of task 10 requires before launching `/gubia run`.
 #

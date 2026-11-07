@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the streak sentinel reset when `effort_level` changes
-# (plan/02.md: "the streak sentinel reset (in `run` process memory)
+# ("the streak sentinel reset (in `run` process memory)
 # when the start-of-iteration re-read detects that `effort_level`
 # changed since the previous iteration").
 #

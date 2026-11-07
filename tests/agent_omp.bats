@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of agent_omp (plan/03.md): checks that the function wires up
+# Test of agent_omp: checks that the function wires up
 # {prompt_file} transport (GUBIA_PROMPT_MODE) and stdout output
 # (GUBIA_OUTPUT_MODE).
 

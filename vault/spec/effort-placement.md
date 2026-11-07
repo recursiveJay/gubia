@@ -73,7 +73,7 @@ It never invents transitions.
 
 The keyword table is an array in the header of `effort-plan.sh`, the single
 source of truth. Matching is whole-word, case-insensitive, on the bullet's
-first line, in English (plans and `scripts/check-language.sh` are English).
+first line, in English.
 When several keywords match, the highest level wins.
 
 | Level | Keywords |

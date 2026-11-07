@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of agent_claude (plan/03.md): checks that the function wires up
+# Test of agent_claude: checks that the function wires up
 # stdin transport (GUBIA_PROMPT_MODE) and stdout output
 # (GUBIA_OUTPUT_MODE, no output file flag in the argv).
 

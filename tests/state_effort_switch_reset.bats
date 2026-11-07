@@ -3,7 +3,7 @@
 # Test of the joint reset of `model_index` and the streak sentinel
 # when switching effort level, when the fallback lists of the old
 # and new levels have different lengths
-# (plan/02.md, final subtask: "with lists of different lengths").
+# (final subtask: "with lists of different lengths").
 #
 # vault/spec/catalog.md documents the three real lists:
 # fallback.default.low has 3 models, medium and high have 4. A

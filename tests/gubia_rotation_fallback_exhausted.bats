@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # E2E test of the circular rotation of `model_index` and of the
-# exhaustion of the streak sentinel (plan/06.md: "Add a bats-core test
+# exhaustion of the streak sentinel ("Add a bats-core test
 # (e2e with a fake CLI in the `PATH`, scripted exit codes) that
 # verifies the circular rotation and the exhaustion of the streak
 # sentinel").

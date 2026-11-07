@@ -1,7 +1,7 @@
 # Fixture `repo-minimal`
 
-Self-contained synthetic repository for the e2e tests of task 10
-(plan/10.md): `gubia run` launched over its plan must drain all the
+Self-contained synthetic repository for the e2e tests:
+`gubia run` launched over its plan must drain all the
 subtasks and create `stop.md` next to it, with no human intervention.
 
 It is the versioned version of the temporary repo that the e2e tests of

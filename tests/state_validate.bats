@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the `state_validate` range validator (plan/02.md): covers
+# Test of the `state_validate` range validator: covers
 # `effort_level` and `thinking` as abortive validation (exit 2, naming
 # key and value), and the `model_index` guard
 # (`state_guard_model_index`) as a non-abortive case within the same

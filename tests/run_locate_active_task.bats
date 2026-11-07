@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the extraction of the markdown link path from different
-# forms of the first `- [ ]` of the plan (plan/04.md: "Add a
+# forms of the first `- [ ]` of the plan ("Add a
 # bats-core test that verifies the extraction of the markdown link
 # path from different forms of the first `- [ ]` of the plan").
 #

@@ -11,7 +11,7 @@ Several distinct symptoms of the same underlying problem — the string of
 
 The `- [x]` checkboxes in the task file have TWO authors following
 distinct paths: the judge skill (`judge` action) marks them directly in
-the file with its verdict, and the loop binary (`ralph-loop`) writes a
+the file with its verdict, and the loop writes a
 checkpoint after each `SUBTASK_COMPLETED`. Both reach `[x]` via
 different routes, and the file can end up with marks from both
 mechanisms mixed on the same line, with later commits dragging that
@@ -20,23 +20,17 @@ regression in 09).
 
 Symptom: a positive verdict recorded but the mark absent in the block's
 commit, or `[x]` marks disappearing/appearing between plan commits with
-no real work change. Cross-check against the iteration logs
-(`.ralph/logs/plan/iteration-*.log`) if in doubt.
+no real work change.
 
-Evidence: `.ralph/logs/plan/iteration-000356-20260829-212135.log` and
-`.ralph/logs/plan/iteration-000359-20260829-212451.log` (text: "Action
-applied to the task file: - [x] at the [judge] checkpoint on line
-51"); commit `0aefa89`.
+Evidence: commit `0aefa89`.
 
 ## `plan.md` marked `[x]` while the derived file still holds `[ ]`
 
 Task 10 of a previous plan ended up marked as done in `plan/plan.md`
 with its entry `[x]` even though its derived file still held unmarked
-`[ ]` subtasks — including the closing checkpoints (`[judge]`, and the
-`maestro`/`forja` reviews inserted as the file's last subtasks). The
-`/ralph chivato` reopened it with the note: "**Reopened by chivato**:
+`[ ]` subtasks — including the closing checkpoint (`[judge]`). It was
+reopened with the note: "**Reopened**:
 the plan marked this task as done but subtasks remained unmarked"
-(`plan/plan/10.md:2-5`).
 
 Symptom: the task's entry in `plan/plan.md` is `[x]` while the derived
 file (`plan/plan/NN.md`) still holds `- [ ]` inside: the upward
@@ -47,9 +41,8 @@ propagation and the actual draining of the file did not match up.
 The judge's rejection annotation on a subtask line ("rejected by judge
 (attempt N)") is cleared when the loop re-marks the subtask `[x]`, so
 the judge's own escalation counter resets to attempt 1 and the rejection
-never escalates. In task 03 the same literal-grep rejection recurred at
-"attempt 1" twice (`.gubia/logs/25.out`, `.gubia/logs/28.out`) because
-re-marking the subtask erased the previous verdict before the judge ran
+never escalates. The same literal-grep rejection recurred at
+"attempt 1" twice because re-marking the subtask erased the previous verdict before the judge ran
 again.
 
 Symptom: a `[judge]` rejection repeats with "attempt 1" each time and
@@ -76,9 +69,8 @@ Rule: after any edit that touches a plan/task file's structural lines,
 grep for `^- \[(judge|scribe)` and restore the `[ ]` checkbox on any line
 missing it, before marking the surrounding subtask done.
 
-Evidence: task 01, `.gubia/logs/14.out` — "the checkpoint line had lost its
-checkbox (it read `- [judge] …` instead of `- [ ] [judge] …`). Because of
-that, the loop's 'first - [ ]' search would have skipped it."
+Observed: a checkpoint line that read `- [judge] …` instead of
+`- [ ] [judge] …` would have been skipped by the loop's 'first - [ ]' search.
 
 ## An "idempotent" generator can reset checkbox state and undo drained work
 
@@ -102,8 +94,7 @@ Evidence: `skills/gubia/scripts/effort-expand-00.sh` (commit `2bcadff`):
 `is_expand_bullet` matches both `- [ ]` and `- [x]` forms, then the loop
 re-emits `- [ ] Interleave effort subtasks …` — so re-running the script
 after any per-file bullet is drained resets it to unchecked. Flagged but
-left unfixed in the judge note of `plan/task/02.md`, because phase 0 runs
-the script exactly once.
+left unfixed, because phase 0 runs the script exactly once.
 
 ## Common rule
 
@@ -113,5 +104,3 @@ the file's last subtasks. Cross-check the plan's `[x]` against the
 task file's internal checkboxes before propagating upward, and do not
 treat the string of checkboxes as sole evidence of work without
 cross-checking logs when in doubt.
-
-Evidence: `plan/plan/10.md:2-5` (cited above).

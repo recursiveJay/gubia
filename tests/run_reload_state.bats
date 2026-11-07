@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the `state.env` re-read at the start of each iteration
-# (plan/06.md: "Implement the `state.env` re-read at the start of each
+# ("Implement the `state.env` re-read at the start of each
 # iteration of the `gubia run` loop").
 #
 # What is observed is that the state an iteration uses is the one in

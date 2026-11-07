@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the `sync-skills` target of the justfile (plan/09.md): checks
+# Test of the `sync-skills` target of the justfile: checks
 # that it overwrites an already-installed skill file with the CURRENT
 # content of the repo, even if the installed file is committed in its own
 # git repo (this rules out `sync-skills` doing anything finer than a plain

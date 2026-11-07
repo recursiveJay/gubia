@@ -29,7 +29,7 @@ communicated by the link in each plan entry.
 
 The contract for each iteration (active task, termination token, prohibition
 on editing checkboxes) is injected by the engine, not by this skill or the
-plan. A `## Loop instructions (ralph)` header inherited in the plan is inert
+plan. A `## Loop instructions` header inherited in the plan is inert
 text.
 
 ## Hard rules

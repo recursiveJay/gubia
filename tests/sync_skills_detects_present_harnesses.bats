@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the justfile `sync-skills` target (plan/09.md): checks that it
+# Test of the justfile `sync-skills` target: checks that it
 # detects which harnesses (`claude`, `codex`, `omp`, `devin`) are present
 # on the machine and syncs ONLY those: each present harness receives the
 # skills in its own layout, and for the absent ones not even the

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the process group teardown (plan/05.md, subtask "Add a
+# Test of the process group teardown (subtask "Add a
 # bats-core test with a fake CLI in the `PATH` that verifies that the
 # teardown of an iteration kills the whole process group without
 # leaving orphans").

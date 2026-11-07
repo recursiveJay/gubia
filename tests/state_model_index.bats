@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Test of the non-aborting range guard of `model_index`
-# (plan/02.md: "out of range of the active list -> back to 0 with a
+# ("out of range of the active list -> back to 0 with a
 # warning on stderr, without aborting").
 #
 # The `state_` module is sourced from the script (`BASH_SOURCE`

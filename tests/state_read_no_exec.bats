@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test of the allowlist reader (`state_read`, plan/02.md: "Never `source`
+# Test of the allowlist reader (`state_read`: "Never `source`
 # `state.env`: read line by line with an allowlist only"): a value
 # like `$(rm -rf ~)` in a key must stay literal in the exported
 # variable, never get executed. `state_read` uses `printf -v`

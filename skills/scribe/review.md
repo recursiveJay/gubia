@@ -74,14 +74,19 @@ With the three sets of findings:
 2. Contrast against INVENTORY: if there is already an entry covering the
    finding, it is discarded or marked as a candidate to extend (not to
    create).
-3. Classify each surviving finding into exactly one of:
+3. Discard what only narrates this session's circumstances (WIP found in the
+   working tree, a staging choice driven by someone else's unrelated
+   changes). If the finding embeds a general rule, keep only the rule,
+   phrased without the session. Commit hashes, task numbers and logs go at
+   most in the entry's evidence, never in place of the rule.
+4. Classify each surviving finding into exactly one of:
    - **create**: new knowledge, with no prior entry covering it.
    - **extend**: an existing entry needs a precision, a new case, or a
      correction of a datum that became obsolete.
    - **delete**: an existing entry is no longer true or was contradicted by
      the finding itself (e.g. a documented pitfall that this task proves no
      longer applies).
-4. Each *create* entry follows the format block corresponding to the
+5. Each *create* entry follows the format block corresponding to the
    destination (see "Format of an entry", below). One single concern per
    entry — never mix a pitfall and a decision in the same one.
 
@@ -150,4 +155,3 @@ inherits the frontmatter of the file that contains it.>
 - One single concern per entry: never mix types (`methodology`, `pitfall`,
   `decision`) in the same block.
 - Parallel builders only in `vault/` mode; sequential in single-skill mode.
-- It does not delegate to `forja`: it does not exist yet.
